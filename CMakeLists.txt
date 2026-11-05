@@ -1,0 +1,92 @@
+cmake_minimum_required(VERSION 3.21)
+project(TuxDirStat VERSION 1.3 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Her arayüz ayrı bir program olarak derlenir (GTK 3 ve GTK 4 aynı süreçte yüklenemez).
+option(TUXDIRSTAT_QT   "Qt 6 arayüzü (tuxdirstat)"        ON)
+option(TUXDIRSTAT_GTK3 "GTK 3 arayüzü (tuxdirstat-gtk3)"  OFF)
+option(TUXDIRSTAT_GTK4 "GTK 4 arayüzü (tuxdirstat-gtk4)"  OFF)
+option(TUXDIRSTAT_TK   "Tk arayüzü (tuxdirstat-tk)"       OFF)
+option(TUXDIRSTAT_TESTS "Çekirdek birim testleri (ctest)" OFF)
+
+find_package(Threads REQUIRED)
+find_package(PkgConfig)
+include(GNUInstallDirs)
+
+add_library(tuxdirstat_core STATIC
+  src/core/core.cpp
+  src/core/session.cpp
+  src/core/treemap_render.cpp
+  src/core/report.cpp
+  src/core/extinfo.cpp
+)
+target_include_directories(tuxdirstat_core PUBLIC src/core)
+target_compile_options(tuxdirstat_core PRIVATE -Wall -Wextra)
+target_compile_definitions(tuxdirstat_core PRIVATE TUXDIRSTAT_VERSION="${PROJECT_VERSION}")
+target_link_libraries(tuxdirstat_core PUBLIC Threads::Threads)
+
+function(tuxdirstat_desktop target name categories)
+  set(DT_NAME "${name}")
+  set(DT_EXEC "${target}")
+  set(DT_CATS "${categories}")
+  configure_file(${CMAKE_SOURCE_DIR}/tuxdirstat.desktop.in ${CMAKE_BINARY_DIR}/${target}.desktop @ONLY)
+  install(TARGETS ${target})
+  install(FILES ${CMAKE_BINARY_DIR}/${target}.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+endfunction()
+
+if(TUXDIRSTAT_QT)
+  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  add_executable(tuxdirstat
+    src/qt/main.cpp
+    src/qt/treemodel.cpp
+    src/qt/treemap.cpp
+    src/qt/mainwindow.cpp
+    src/qt/theme.cpp
+  )
+  set_target_properties(tuxdirstat PROPERTIES AUTOMOC ON)
+  target_compile_options(tuxdirstat PRIVATE -Wall -Wextra)
+  target_link_libraries(tuxdirstat PRIVATE tuxdirstat_core Qt6::Widgets)
+  tuxdirstat_desktop(tuxdirstat "TuxDirStat" "Qt;Utility;System;Filesystem;")
+endif()
+
+if(TUXDIRSTAT_GTK3)
+  pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
+  add_executable(tuxdirstat-gtk3 src/gtk/main.cpp)
+  target_compile_options(tuxdirstat-gtk3 PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
+  target_link_libraries(tuxdirstat-gtk3 PRIVATE tuxdirstat_core PkgConfig::GTK3)
+  tuxdirstat_desktop(tuxdirstat-gtk3 "TuxDirStat (GTK 3)" "GTK;Utility;System;Filesystem;")
+endif()
+
+if(TUXDIRSTAT_GTK4)
+  pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+  add_executable(tuxdirstat-gtk4 src/gtk/main.cpp)
+  target_compile_options(tuxdirstat-gtk4 PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
+  target_link_libraries(tuxdirstat-gtk4 PRIVATE tuxdirstat_core PkgConfig::GTK4)
+  tuxdirstat_desktop(tuxdirstat-gtk4 "TuxDirStat (GTK 4)" "GTK;Utility;System;Filesystem;")
+endif()
+
+if(TUXDIRSTAT_TK)
+  pkg_check_modules(TK REQUIRED IMPORTED_TARGET tk)
+  pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+  add_executable(tuxdirstat-tk src/tk/main.cpp)
+  target_compile_options(tuxdirstat-tk PRIVATE -Wall -Wextra)
+  target_link_libraries(tuxdirstat-tk PRIVATE tuxdirstat_core PkgConfig::TK PkgConfig::GIO)
+  tuxdirstat_desktop(tuxdirstat-tk "TuxDirStat (Tk)" "Utility;System;Filesystem;")
+endif()
+
+if(TUXDIRSTAT_TESTS)
+  enable_testing()
+  add_executable(tuxdirstat_core_test tests/core_test.cpp)
+  target_compile_options(tuxdirstat_core_test PRIVATE -Wall -Wextra)
+  target_link_libraries(tuxdirstat_core_test PRIVATE tuxdirstat_core)
+  add_test(NAME core COMMAND tuxdirstat_core_test)
+endif()
+
+if(NOT TUXDIRSTAT_QT AND NOT TUXDIRSTAT_GTK3 AND NOT TUXDIRSTAT_GTK4 AND NOT TUXDIRSTAT_TK)
+  message(FATAL_ERROR "En az bir arayüz seçin: -DTUXDIRSTAT_QT/GTK3/GTK4/TK=ON")
+endif()

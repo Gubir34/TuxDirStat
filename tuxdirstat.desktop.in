@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=@DT_NAME@
+GenericName=Disk Usage Analyzer
+GenericName[tr]=Disk Kullanım Analizörü
+Comment=Disk kullanımını ağaç ve treemap ile gösterir
+Exec=@DT_EXEC@ %f
+Icon=drive-harddisk
+Terminal=false
+Categories=@DT_CATS@
