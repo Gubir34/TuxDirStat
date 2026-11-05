@@ -107,3 +107,7 @@ src/gtk/    GTK 3 / GTK 4 arayüzü (tek kaynak)
 src/tk/     Tk arayüzü (gömülü Tcl betiği + C++)
 tests/      çekirdek birim testleri
 ```
+
+## Lisans
+
+TuxDirStat, [GNU Genel Kamu Lisansı sürüm 3](LICENSE) (GPL-3.0-or-later) ile dağıtılır.
