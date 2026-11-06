@@ -1,7 +1,7 @@
 # Maintainer: Gubir34 <e-posta@adresin>
 
 pkgname=tuxdirstat-git
-pkgver=1.3.r2.a7297e3
+pkgver=1.4.r3.dc1da7d
 pkgrel=1
 pkgdesc="Fast disk usage analyzer: tree, treemap, duplicates, cleanup suggestions and snapshots (Qt, GTK 3/4 and Tk)"
 arch=('x86_64' 'aarch64')
