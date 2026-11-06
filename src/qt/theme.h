@@ -2,10 +2,29 @@
 // Uygulama teması: "system" masaüstünün yerel görünümü; "light"/"dark" Fusion stili
 // üzerine TuxDirStat'ın kendi paletleri.
 
+#include <initializer_list>
 #include <string>
+#include <string_view>
 
 #include <QColor>
+#include <QString>
 #include <QStyledItemDelegate>
+
+#include "core.h"
+#include "i18n.h"
+
+// Çevrilmiş metinler QString olarak.
+inline QString QT(const char *en)
+{
+    return QString::fromUtf8(T(en));
+}
+inline QString QTF(const char *en, std::initializer_list<std::string_view> args)
+{
+    return QString::fromStdString(TF(en, args));
+}
+
+// Treemap paletindeki rengin ekranda gösterilecek hâli.
+QColor displayColor(const RGBf &c);
 
 void applyTheme(const std::string &theme);
 bool isDarkPalette();

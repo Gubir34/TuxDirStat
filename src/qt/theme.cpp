@@ -72,6 +72,11 @@ QMenu::item:selected { background: palette(highlight); color: palette(highlighte
 
 }  // namespace
 
+QColor displayColor(const RGBf &c)
+{
+    return QColor(std::min(255, int(c.r * 1.4f)), std::min(255, int(c.g * 1.4f)), std::min(255, int(c.b * 1.4f)));
+}
+
 void applyTheme(const std::string &theme)
 {
     auto *app = qApp;

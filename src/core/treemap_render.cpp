@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <thread>
 
 namespace {
@@ -165,7 +166,10 @@ void TreemapRenderer::layout(Node *root, bool ap, const std::vector<RGBf> &color
         Node *n;
         double x, y, w, h, s0, s1, s2, s3, ht;
     };
+    const int64_t now = std::time(nullptr);
+    const bool byAge = mode_ == ColorMode::Age;
     auto colorFor = [&colors](uint32_t ext) { return ext < colors.size() ? colors[ext] : dirColor(); };
+    auto nodeColor = [&](const Node *n) { return byAge ? ageColor(n->mtime, now) : colorFor(n->ext); };
     std::vector<Item> stack{{root, 0, 0, double(w_), double(h_), 0, 0, 0, 0, CUSHION_H}};
     std::vector<Node *> kids;
     std::vector<double> sizes;
@@ -187,14 +191,16 @@ void TreemapRenderer::layout(Node *root, bool ap, const std::vector<RGBf> &color
         Leaf leaf{x0, y0, x1, y1, it.s0, it.s1, it.s2, it.s3, dirColor(), it.n};
         // Grup tek blok olarak çizilir; içine yakınlaşıldığında dosyaları görünür.
         if (!it.n->isDir || ((it.n->flags & F_GROUP) && it.n != root)) {
-            leaf.color = colorFor(it.n->ext);
+            leaf.color = nodeColor(it.n);
             leaves_.push_back(leaf);
             continue;
         }
         if ((x1 - x0) * (y1 - y0) <= 4) {
-            int e = dominantExt(it.n, ap);
-            if (e >= 0)
+            if (byAge) {
+                leaf.color = nodeColor(it.n);
+            } else if (int e = dominantExt(it.n, ap); e >= 0) {
                 leaf.color = colorFor(uint32_t(e));
+            }
             leaves_.push_back(leaf);
             continue;
         }

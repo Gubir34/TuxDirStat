@@ -1,0 +1,23 @@
+#compdef tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
+# zsh completion for TuxDirStat
+
+_arguments -s \
+  '--report[text report of the largest folders, files and extensions]' \
+  '*--find[search the scan]:query: ' \
+  '--duplicates[list duplicate files]' \
+  '--cleanup[list things that can be cleaned up]' \
+  '--owners[disk usage per owner]' \
+  '--unowned[files no pacman package owns]' \
+  '--export[save the scan as a snapshot]:snapshot file:_files' \
+  '--csv[write every entry to a CSV file]:CSV file:_files' \
+  '--compare[compare with an earlier snapshot]:snapshot:_files -g "*.(json|gz|zst|xz|bz2)"' \
+  '--import[read a snapshot instead of scanning]:snapshot:_files -g "*.(json|gz|zst|xz|bz2)"' \
+  '--top[rows per report list]:count: ' \
+  '--apparent[use apparent size]' \
+  '--group[group similar items in the report]' \
+  '--group-min[minimum items per group]:count: ' \
+  '--all-fs[cross into other file systems]' \
+  '--lang[interface language]:language:(en tr)' \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)--version[show the version]' \
+  '1:folder or snapshot:_files'

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TuxDirStat simgesi: gölgeli treemap kutuları. GPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <radialGradient id="blue" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#8fb0ff"/>
+      <stop offset="1" stop-color="#1d43b8"/>
+    </radialGradient>
+    <radialGradient id="red" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#ff8f8f"/>
+      <stop offset="1" stop-color="#a81c1c"/>
+    </radialGradient>
+    <radialGradient id="green" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#8ff0a0"/>
+      <stop offset="1" stop-color="#17852a"/>
+    </radialGradient>
+    <radialGradient id="yellow" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#fff3a0"/>
+      <stop offset="1" stop-color="#b89a10"/>
+    </radialGradient>
+    <radialGradient id="cyan" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#a0f6ff"/>
+      <stop offset="1" stop-color="#138a96"/>
+    </radialGradient>
+    <radialGradient id="purple" cx="0.3" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#d2c6ff"/>
+      <stop offset="1" stop-color="#5a44c4"/>
+    </radialGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3f47"/>
+      <stop offset="1" stop-color="#1b1e23"/>
+    </linearGradient>
+    <clipPath id="round">
+      <rect x="10" y="10" width="108" height="108" rx="14"/>
+    </clipPath>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="18" fill="url(#frame)"/>
+  <g clip-path="url(#round)" stroke="#1b1e23" stroke-width="2">
+    <rect x="10" y="10" width="62" height="108" fill="url(#blue)"/>
+    <rect x="72" y="10" width="46" height="52" fill="url(#red)"/>
+    <rect x="72" y="62" width="26" height="56" fill="url(#green)"/>
+    <rect x="98" y="62" width="20" height="30" fill="url(#yellow)"/>
+    <rect x="98" y="92" width="20" height="26" fill="url(#cyan)"/>
+    <rect x="10" y="84" width="34" height="34" fill="url(#purple)"/>
+  </g>
+</svg>

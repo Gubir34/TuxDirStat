@@ -2,6 +2,7 @@
 // Arayüzlerin ortak mantığı: tarama yaşam döngüsü, ağaç sahipliği, uzantı
 // tablosu ve sistem işlemleri (silme, açma, sürücü listesi).
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,11 +34,17 @@ public:
 
     // — tarama —
     void startScan(const std::string &path, Node *target = nullptr);
+    // Anlık görüntüyü (ncdu JSON) arka planda yükler; bitince poll() NewTree döndürür.
+    void openSnapshot(const std::string &file);
+    // pkexec ile yönetici olarak salt okunur tarama: kök süreç ağacı geçici bir anlık
+    // görüntüye yazar, arayüz onu yükler. Silme işlemleri yine kullanıcı yetkisiyle yapılır.
+    void startPrivilegedScan(const std::string &path);
     void cancelScan();
-    bool scanning() const { return scanner_ != nullptr; }
+    bool scanning() const { return scanner_ != nullptr || loader_ != nullptr; }
     uint64_t progressCount() const;
     uint64_t progressBytes() const;
     std::string progressPath() const;
+    std::string progressText() const;  // durum çubuğu için hazır metin
 
     enum class Result { Idle, Running, NewTree, Refresh, Cancelled, Failed };
     // Tarama bittiğinde sonucu bekletir. Arayüz eski düğümlere işaretçileri
@@ -60,9 +67,14 @@ public:
     std::vector<RGBf> colors;  // ExtTable kimliğine göre treemap renkleri
     std::string extLabel(uint32_t ext) const;  // ".png" ya da "(yok)"
 
+    struct Loader;
+
 private:
+    void startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn);
+
     std::unique_ptr<Tree> tree_, pending_;
     std::unique_ptr<Scanner> scanner_;
+    std::shared_ptr<Loader> loader_;
     std::vector<ExtStat> pendingExt_;
     Node *target_ = nullptr;
     std::string error_;
@@ -71,6 +83,11 @@ private:
 };
 
 // — sistem işlemleri —
+// Programı çalıştırıp standart çıktısını toplar; çıkış kodunu (başlatılamazsa -1) döndürür.
+// timeoutMs > 0 ise süre dolunca süreç sonlandırılır ve -2 döner.
+int runCapture(const std::vector<std::string> &args, std::string *out, int timeoutMs = 0);
+bool haveProgram(const std::string &name);  // PATH'te var mı
+std::string selfExe();
 bool removePath(const std::string &path, std::string *err);  // kalıcı silme; bağları izlemez
 bool trashWithCommand(const std::string &path);              // gio / kioclient ile çöpe taşıma
 void openPath(const std::string &path);                      // varsayılan uygulamayla aç

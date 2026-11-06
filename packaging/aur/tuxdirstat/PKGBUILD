@@ -1,0 +1,37 @@
+# Maintainer: Gubir34 <e-posta@adresin>
+
+pkgname=tuxdirstat
+pkgver=1.4
+pkgrel=1
+pkgdesc="Fast disk usage analyzer: tree, treemap, duplicates, cleanup suggestions and snapshots (Qt, GTK 3/4 and Tk)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Gubir34/TuxDirStat"
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'gtk3' 'gtk4' 'tk' 'glib2' 'gcc-libs' 'glibc')
+makedepends=('git' 'cmake' 'ninja' 'python')
+optdepends=('polkit: scan as administrator (pkexec)'
+            'pacman-contrib: paccache command in cleanup suggestions'
+            'zstd: open .json.zst snapshots')
+source=("tuxdirstat::git+https://github.com/Gubir34/TuxDirStat.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+build() {
+  cmake -S tuxdirstat -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DTUXDIRSTAT_QT=ON \
+    -DTUXDIRSTAT_GTK3=ON \
+    -DTUXDIRSTAT_GTK4=ON \
+    -DTUXDIRSTAT_TK=ON \
+    -DTUXDIRSTAT_TESTS=ON
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 tuxdirstat/README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

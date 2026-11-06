@@ -1,5 +1,12 @@
 #include "session.h"
 
+#include <chrono>
+#include <csignal>
+#include <poll.h>
+
+#include "tools.h"
+#include "i18n.h"
+
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
@@ -18,13 +25,118 @@ extern char **environ;
 
 // ───────────────────────────── Oturum ─────────────────────────────
 
+// Arka planda ağaç üreten iş (anlık görüntü yükleme, yönetici taraması). İptal edilen
+// yükleyici kendi iş parçacığında bitene dek yaşar; oturum yalnızca ona bıraktığı
+// paylaşılan işaretçiyi düşürür.
+struct Session::Loader {
+    std::mutex m;
+    std::string status;
+    std::unique_ptr<Tree> tree;
+    std::string error;
+    double elapsed = 0;
+    uint64_t count = 0;
+    std::atomic<bool> done{false}, cancelled{false};
+    pid_t child = 0;
+
+    void setStatus(std::string s)
+    {
+        std::lock_guard l(m);
+        status = std::move(s);
+    }
+};
+
 Session::~Session()
 {
     scanner_.reset();
+    if (loader_)
+        loader_->cancelled = true;
+}
+
+static uint64_t countNodes(const Node *root)
+{
+    uint64_t n = 0;
+    std::vector<const Node *> st{root};
+    while (!st.empty()) {
+        const Node *d = st.back();
+        st.pop_back();
+        n += d->children.size();
+        for (const Node *c : d->children)
+            if (c->isDir)
+                st.push_back(c);
+    }
+    return n;
+}
+
+void Session::startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn)
+{
+    scanner_.reset();
+    auto ld = std::make_shared<Loader>();
+    ld->status = std::move(status);
+    loader_ = ld;
+    target_ = nullptr;
+    pending_.reset();
+    std::thread([ld, fn = std::move(fn)] {
+        auto t0 = std::chrono::steady_clock::now();
+        std::unique_ptr<Tree> t = fn(*ld);
+        if (t)
+            ld->count = countNodes(t->root);
+        ld->tree = std::move(t);
+        ld->elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        ld->done = true;
+    }).detach();
+}
+
+void Session::openSnapshot(const std::string &file)
+{
+    startLoader(TF("Loading %1…", {file}), [file](Loader &ld) {
+        std::unique_ptr<Tree> t = loadSnapshot(file, &ld.error, nullptr, &ld.cancelled);
+        return t;
+    });
+}
+
+void Session::startPrivilegedScan(const std::string &path)
+{
+    const bool allFs = !oneFs;
+    startLoader(TF("Waiting for administrator scan of %1…", {path}), [path, allFs](Loader &ld) -> std::unique_ptr<Tree> {
+        const char *rt = std::getenv("XDG_RUNTIME_DIR");
+        std::string tmpl = std::string(rt && *rt ? rt : "/tmp") + "/tuxdirstat-root-XXXXXX";
+        std::vector<char> buf(tmpl.begin(), tmpl.end());
+        buf.push_back(0);
+        const int fd = ::mkstemp(buf.data());
+        if (fd < 0) {
+            ld.error = std::strerror(errno);
+            return nullptr;
+        }
+        ::close(fd);
+        const std::string tmp = buf.data();
+        std::vector<std::string> args{"pkexec", selfExe(), "--export", tmp};
+        if (allFs)
+            args.push_back("--all-fs");
+        args.push_back("--");
+        args.push_back(path);
+        std::string out;
+        const int rc = runCapture(args, &out);
+        std::unique_ptr<Tree> t;
+        if (ld.cancelled) {
+        } else if (rc == 126 || rc == 127) {
+            ld.error = T("Authorization was refused or cancelled.");
+        } else if (rc != 0) {
+            ld.error = rc < 0 ? T("pkexec could not be started (is polkit installed?)")
+                              : TF("The administrator scan failed (exit code %1).", {std::to_string(rc)});
+        } else {
+            ld.setStatus(T("Loading administrator scan…"));
+            t = loadSnapshot(tmp, &ld.error, nullptr, &ld.cancelled);
+        }
+        ::unlink(tmp.c_str());
+        return t;
+    });
 }
 
 void Session::startScan(const std::string &path, Node *target)
 {
+    if (loader_)
+        loader_->cancelled = true;
+    loader_.reset();
     scanner_ = std::make_unique<Scanner>(path, oneFs, scanWorkers());
     target_ = target;
     pending_.reset();
@@ -35,6 +147,8 @@ void Session::cancelScan()
 {
     if (scanner_)
         scanner_->cancel();
+    if (loader_)
+        loader_->cancelled = true;
 }
 
 uint64_t Session::progressCount() const
@@ -52,8 +166,38 @@ std::string Session::progressPath() const
     return scanner_ ? scanner_->currentPath() : std::string();
 }
 
+std::string Session::progressText() const
+{
+    if (loader_) {
+        std::lock_guard l(loader_->m);
+        return loader_->status;
+    }
+    return TF("Scanning… %1 items · %2 · %3", {fmtInt(progressCount()), fmtSize(progressBytes()), progressPath()});
+}
+
 Session::Result Session::poll()
 {
+    if (loader_) {
+        if (loader_->cancelled) {
+            loader_.reset();
+            return Result::Cancelled;
+        }
+        if (!loader_->done)
+            return Result::Running;
+        std::shared_ptr<Loader> ld = std::move(loader_);
+        error_ = ld->error;
+        elapsed_ = ld->elapsed;
+        count_ = ld->count;
+        if (!ld->tree)
+            return error_.empty() ? Result::Cancelled : Result::Failed;
+        error_.clear();
+        pending_ = std::move(ld->tree);
+        pendingExt_.clear();
+        target_ = nullptr;
+        if (grouping)
+            groupFiles(pending_->root, pending_->scratch(), groupMin);
+        return Result::NewTree;
+    }
     if (!scanner_)
         return Result::Idle;
     if (!scanner_->isDone())
@@ -140,7 +284,7 @@ void Session::recomputeExt(const std::vector<ExtStat> *precomputed)
 
 std::string Session::extLabel(uint32_t e) const
 {
-    return e ? "." + ExtTable::name(e) : std::string("(yok)");
+    return e ? "." + ExtTable::name(e) : std::string(T("(none)"));
 }
 
 // ───────────────────────────── Sistem işlemleri ─────────────────────────────
@@ -164,6 +308,94 @@ static int runWait(const std::vector<std::string> &args)
     while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
     }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+int runCapture(const std::vector<std::string> &args, std::string *out, int timeoutMs)
+{
+    if (args.empty())
+        return -1;
+    int pfd[2];
+    if (::pipe2(pfd, O_CLOEXEC) != 0)
+        return -1;
+    std::vector<char *> argv;
+    for (const auto &a : args)
+        argv.push_back(const_cast<char *>(a.c_str()));
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_adddup2(&fa, pfd[1], 1);
+    posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);
+    pid_t pid;
+    const int rc = posix_spawnp(&pid, argv[0], &fa, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&fa);
+    ::close(pfd[1]);
+    if (rc != 0) {
+        ::close(pfd[0]);
+        return -1;
+    }
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    bool timedOut = false;
+    char buf[65536];
+    for (;;) {
+        int wait = -1;
+        if (timeoutMs > 0) {
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
+            if (left <= 0) {
+                timedOut = true;
+                break;
+            }
+            wait = int(left);
+        }
+        pollfd p{pfd[0], POLLIN, 0};
+        const int pr = ::poll(&p, 1, wait);
+        if (pr < 0 && errno == EINTR)
+            continue;
+        if (pr == 0)
+            continue;
+        const ssize_t n = ::read(pfd[0], buf, sizeof buf);
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n <= 0)
+            break;
+        if (out)
+            out->append(buf, size_t(n));
+    }
+    ::close(pfd[0]);
+    if (timedOut)
+        ::kill(pid, SIGKILL);
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+    }
+    if (timedOut)
+        return -2;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+bool haveProgram(const std::string &name)
+{
+    const char *path = std::getenv("PATH");
+    std::string p = path ? path : "/usr/local/bin:/usr/bin:/bin";
+    size_t start = 0;
+    while (start <= p.size()) {
+        size_t end = p.find(':', start);
+        if (end == std::string::npos)
+            end = p.size();
+        const std::string dir = p.substr(start, end - start);
+        if (!dir.empty() && ::access((dir + "/" + name).c_str(), X_OK) == 0)
+            return true;
+        start = end + 1;
+    }
+    return false;
+}
+
+std::string selfExe()
+{
+    char buf[4096];
+    const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof buf - 1);
+    if (n <= 0)
+        return "tuxdirstat";
+    return std::string(buf, size_t(n));
 }
 
 // Ana süreç beklemeden çalıştırır (çift fork ile zombi bırakmaz).

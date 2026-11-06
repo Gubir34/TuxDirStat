@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Release (all interfaces)
+            build_type: Release
+            flags: ""
+          - name: Debug + ASan/UBSan
+            build_type: Debug
+            flags: "-fsanitize=address,undefined -fno-omit-frame-pointer"
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel cmake ninja git python \
+            qt6-base gtk3 gtk4 tk glib2 appstream desktop-file-utils
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            -DTUXDIRSTAT_QT=ON -DTUXDIRSTAT_GTK3=ON -DTUXDIRSTAT_GTK4=ON -DTUXDIRSTAT_TK=ON \
+            -DTUXDIRSTAT_TESTS=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Command line smoke test
+        run: |
+          ./build/tuxdirstat --version
+          ./build/tuxdirstat --report --top 5 --duplicates --cleanup --owners --export /tmp/s.json /usr/share/doc
+          ./build/tuxdirstat --lang tr --import /tmp/s.json --compare /tmp/s.json --find '>1K type:f'
+      - name: Install and validate metadata
+        run: |
+          DESTDIR=/tmp/pkg cmake --install build --prefix /usr
+          appstreamcli validate --no-net /tmp/pkg/usr/share/metainfo/*.xml
+          desktop-file-validate /tmp/pkg/usr/share/applications/*.desktop

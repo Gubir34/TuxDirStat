@@ -1,0 +1,21 @@
+# fish completion for TuxDirStat (installed under every program name)
+for cmd in tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
+    complete -c $cmd -l report -d 'Text report of the largest folders, files and extensions'
+    complete -c $cmd -l find -x -d 'Search the scan, e.g. "*.iso >1G older:1y"'
+    complete -c $cmd -l duplicates -d 'List duplicate files'
+    complete -c $cmd -l cleanup -d 'List things that can be cleaned up'
+    complete -c $cmd -l owners -d 'Disk usage per owner'
+    complete -c $cmd -l unowned -d 'Files no pacman package owns'
+    complete -c $cmd -l export -r -F -d 'Save the scan as a snapshot'
+    complete -c $cmd -l csv -r -F -d 'Write every entry to a CSV file'
+    complete -c $cmd -l compare -r -F -d 'Compare with an earlier snapshot'
+    complete -c $cmd -l import -r -F -d 'Read a snapshot instead of scanning'
+    complete -c $cmd -l top -x -d 'Rows per report list'
+    complete -c $cmd -l apparent -d 'Use apparent size'
+    complete -c $cmd -l group -d 'Group similar items in the report'
+    complete -c $cmd -l group-min -x -d 'Minimum items per group'
+    complete -c $cmd -l all-fs -d 'Cross into other file systems'
+    complete -c $cmd -l lang -x -a 'en tr' -d 'Interface language'
+    complete -c $cmd -s h -l help -d 'Show help'
+    complete -c $cmd -l version -d 'Show the version'
+end

@@ -1,5 +1,7 @@
 #include "treemap.h"
 
+#include "theme.h"
+
 #include <QMouseEvent>
 #include <QPainter>
 
@@ -34,6 +36,12 @@ void Treemap::setSelected(Node *n)
 {
     selected_ = n;
     compose();
+}
+
+void Treemap::setColorMode(ColorMode m)
+{
+    renderer_.setColorMode(m);
+    schedule();
 }
 
 void Treemap::setHighlight(int ext)
@@ -77,7 +85,7 @@ void Treemap::paintEvent(QPaintEvent *)
         p.fillRect(rect(), palette().window());
         if (!root_) {
             p.setPen(palette().placeholderText().color());
-            p.drawText(rect(), Qt::AlignCenter, "Treemap burada görünecek");
+            p.drawText(rect(), Qt::AlignCenter, QT("The treemap will appear here"));
         }
     }
 }

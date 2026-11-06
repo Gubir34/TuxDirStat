@@ -9,7 +9,7 @@
 #include <QPainter>
 #include <QStyle>
 
-static const char *const COLS[] = {"Ad", "Alt ağaç", "%", "Boyut", "Öğe", "Dosya", "Klasör", "Son değişiklik"};
+static const char *const COLS[] = {N_("Name"), N_("Subtree"), "%", N_("Size"), N_("Items"), N_("Files"), N_("Folders"), N_("Modified")};
 
 TreeModel::TreeModel(QObject *parent) : QAbstractItemModel(parent)
 {
@@ -202,7 +202,7 @@ QVariant TreeModel::headerData(int section, Qt::Orientation o, int role) const
     if (o != Qt::Horizontal)
         return {};
     if (role == Qt::DisplayRole)
-        return QString::fromUtf8(COLS[section]);
+        return QT(COLS[section]);
     if (role == Qt::TextAlignmentRole && section >= Pct)
         return int(Qt::AlignRight | Qt::AlignVCenter);
     return {};

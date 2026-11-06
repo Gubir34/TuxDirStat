@@ -18,6 +18,9 @@ class TreemapRenderer {
 public:
     // Pikseller 0xFFRRGGBB biçimindedir (QImage::Format_RGB32 / CAIRO_FORMAT_RGB24 ile aynı).
     void render(Node *root, int width, int height, bool apparent, const std::vector<RGBf> &colors);
+    // Sonraki render() için renklendirme ölçütü (varsayılan: uzantı).
+    void setColorMode(ColorMode m) { mode_ = m; }
+    ColorMode colorMode() const { return mode_; }
     // Düğümler silinmeden önce çağrılır: eski düğüm işaretçilerini bırakır, görüntü kalır.
     void forgetNodes();
     void clear();
@@ -45,5 +48,6 @@ private:
     std::vector<int32_t> idx_;
     std::vector<uint32_t> pixels_;
     const Node *root_ = nullptr;
+    ColorMode mode_ = ColorMode::Extension;
     int w_ = 0, h_ = 0;
 };

@@ -6,6 +6,7 @@
 #include <gio/gio.h>
 
 #include <algorithm>
+#include <memory>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,15 +15,25 @@
 #include <vector>
 
 #include "extinfo.h"
+#include "i18n.h"
+#include "tools.h"
 #include "report.h"
 #include "session.h"
 #include "treemap_render.h"
 
 namespace {
 
+#if TCL_MAJOR_VERSION >= 9
+using TclSize = Tcl_Size;
+#else
+using TclSize = int;
+#endif
+
 const char *const UI_SCRIPT = R"TCL(
+proc T {s} { return [dt tr $s] }
 ttk::style theme use clam
 ttk::style configure Treeview -rowheight 22
+ttk::style configure TButton -width -4
 option add *tearOff 0
 wm title . TuxDirStat
 wm geometry . 1280x860
@@ -49,43 +60,70 @@ set ::onefs 1
 set ::group 0
 set ::groupmin 16
 set ::theme system
-set ::groupMinText "Eşik: 16"
+set ::lang system
+set ::age 0
+set ::asadmin 0
 set ::showtm 1
 set ::statusL ""
 set ::statusR ""
-set ::zoomText "Treemap"
+set ::zoomText [T "Treemap"]
+set ::query ""
 
 # Araç çubuğu
 ttk::frame .tb -padding {4 3}
-ttk::button .tb.open -text "Aç…" -command {dt act open}
-ttk::button .tb.rescan -text "Yeniden tara" -command {dt act rescan}
-ttk::button .tb.stop -text "Durdur" -command {dt act stop} -state disabled
+ttk::button .tb.open -text [T "Open…"] -command {dt act open}
+ttk::button .tb.rescan -text [T "Rescan"] -command {dt act rescan}
+ttk::button .tb.stop -text [T "Stop"] -command {dt act stop} -state disabled
 ttk::separator .tb.s1 -orient vertical
-ttk::button .tb.zin -text "Yakınlaştır" -command {dt act zoomin}
-ttk::button .tb.zout -text "Uzaklaştır" -command {dt act zoomout} -state disabled
-ttk::button .tb.zroot -text "Kök" -command {dt act zoomroot}
+ttk::button .tb.zin -text [T "Zoom in"] -command {dt act zoomin}
+ttk::button .tb.zout -text [T "Zoom out"] -command {dt act zoomout} -state disabled
+ttk::button .tb.zroot -text [T "Root"] -command {dt act zoomroot}
 ttk::separator .tb.s2 -orient vertical
-ttk::checkbutton .tb.app -text "Görünür boyut" -variable ::apparent -command {dt act apparent}
-ttk::checkbutton .tb.onefs -text "Tek dosya sistemi" -variable ::onefs -command {dt act onefs}
-ttk::checkbutton .tb.group -text "Dosyaları grupla" -variable ::group -command {dt act group}
-ttk::menubutton .tb.gmin -textvariable ::groupMinText -menu .tb.gmin.m
-menu .tb.gmin.m
-foreach n {8 16 32 64 128} {
-    .tb.gmin.m add radiobutton -label "En az $n öğe" -variable ::groupmin -value $n -command {dt act groupmin}
-}
-ttk::checkbutton .tb.tm -text "Treemap" -variable ::showtm -command toggleTreemap
-ttk::menubutton .tb.theme -text "Tema" -menu .tb.theme.m
+ttk::checkbutton .tb.app -text [T "Apparent size"] -variable ::apparent -command {dt act apparent}
+ttk::checkbutton .tb.onefs -text [T "One file system"] -variable ::onefs -command {dt act onefs}
+ttk::checkbutton .tb.group -text [T "Group files"] -variable ::group -command {dt act group}
+ttk::menubutton .tb.file -text [T "File"] -menu .tb.file.m
+menu .tb.file.m
+.tb.file.m add command -label [T "Open snapshot…"] -command {dt act opensnap}
+.tb.file.m add command -label [T "Save snapshot…"] -command {dt act savesnap} -accelerator Ctrl+S
+.tb.file.m add command -label [T "Export as CSV…"] -command {dt act csv}
+ttk::menubutton .tb.tools -text [T "Tools"] -menu .tb.tools.m
+menu .tb.tools.m
+.tb.tools.m add command -label [T "Find files…"] -command {dt act find} -accelerator Ctrl+F
+.tb.tools.m add command -label [T "Duplicate files…"] -command {dt act dup}
+.tb.tools.m add command -label [T "Cleanup suggestions…"] -command {dt act cleanup}
+.tb.tools.m add separator
+.tb.tools.m add command -label [T "Usage by owner"] -command {dt act owners}
+.tb.tools.m add command -label [T "Files no package owns…"] -command {dt act unowned}
+.tb.tools.m add separator
+.tb.tools.m add command -label [T "Compare with snapshot…"] -command {dt act compare}
+ttk::menubutton .tb.theme -text [T "View"] -menu .tb.theme.m
 menu .tb.theme.m
-foreach {id label} {system Sistem light Açık dark Koyu} {
+.tb.theme.m add checkbutton -label [T "Treemap"] -variable ::showtm -command toggleTreemap -accelerator F9
+.tb.theme.m add checkbutton -label [T "Color by age"] -variable ::age -command {dt act age} -accelerator F8
+menu .tb.theme.m.gmin
+foreach n {8 16 32 64 128} {
+    .tb.theme.m.gmin add radiobutton -label [format [T "At least %s items"] $n] -variable ::groupmin -value $n -command {dt act groupmin}
+}
+.tb.theme.m add cascade -label [T "Grouping threshold"] -menu .tb.theme.m.gmin
+.tb.theme.m add separator
+.tb.theme.m add command -label [T "Theme"] -state disabled
+foreach {id label} [list system [T "System"] light [T "Light"] dark [T "Dark"]] {
     .tb.theme.m add radiobutton -label $label -variable ::theme -value $id -command {dt act theme}
 }
-ttk::button .tb.about -text "Hakkında" -command {dt act about}
+.tb.theme.m add separator
+.tb.theme.m add command -label [T "Language"] -state disabled
+foreach {id label} [list system [T "System"] en English tr Türkçe] {
+    .tb.theme.m add radiobutton -label $label -variable ::lang -value $id -command {dt act lang}
+}
+ttk::button .tb.about -text [T "About"] -command {dt act about}
+# Menüler önce yerleşir: pencere daralınca sağdaki menüler değil soldaki seçenekler kısalır.
+pack .tb.about .tb.theme .tb.tools .tb.file -side right -padx 2
 pack .tb.open .tb.rescan .tb.stop -side left -padx 1
 pack .tb.s1 -side left -fill y -padx 4
 pack .tb.zin .tb.zout .tb.zroot -side left -padx 1
 pack .tb.s2 -side left -fill y -padx 4
-pack .tb.app .tb.onefs .tb.group .tb.gmin .tb.tm -side left -padx 4
-pack .tb.about .tb.theme -side right -padx 2
+pack .tb.app .tb.onefs .tb.group -side left -padx 4
 
 # Durum çubuğu
 ttk::frame .sb -padding {6 2}
@@ -101,9 +139,9 @@ ttk::panedwindow .ph -orient horizontal
 # Klasör ağacı
 ttk::frame .tf
 ttk::treeview .t -columns {bar pct size items files dirs mtime} -selectmode browse
-.t heading #0 -text "Ad" -anchor w -command {dt sort 0}
+.t heading #0 -text [T "Name"] -anchor w -command {dt sort 0}
 set i 1
-foreach {col title w} {bar "Alt ağaç" 120 pct "%" 70 size "Boyut" 90 items "Öğe" 80 files "Dosya" 80 dirs "Klasör" 70 mtime "Son değişiklik" 140} {
+foreach {col title w} [list bar [T "Subtree"] 120 pct "%" 70 size [T "Size"] 90 items [T "Items"] 80 files [T "Files"] 80 dirs [T "Folders"] 70 mtime [T "Modified"] 140] {
     .t heading $col -text $title -anchor e -command [list dt sort $i]
     .t column $col -width $w -anchor e -stretch 0
     incr i
@@ -132,11 +170,11 @@ bind .t <Button-3> {
 # Uzantılar
 ttk::frame .ef
 ttk::treeview .e -columns {desc size pct count} -selectmode browse
-.e heading #0 -text "Uzantı" -anchor w -command {dt extsort 0}
-.e heading desc -text "Tür" -anchor w -command {dt extsort 1}
-.e heading size -text "Boyut" -anchor e -command {dt extsort 2}
+.e heading #0 -text [T "Extension"] -anchor w -command {dt extsort 0}
+.e heading desc -text [T "Type"] -anchor w -command {dt extsort 1}
+.e heading size -text [T "Size"] -anchor e -command {dt extsort 2}
 .e heading pct -text "%" -anchor e -command {dt extsort 2}
-.e heading count -text "Dosya" -anchor e -command {dt extsort 3}
+.e heading count -text [T "Files"] -anchor e -command {dt extsort 3}
 .e column #0 -width 90 -stretch 0
 .e column desc -width 200 -stretch 1
 .e column size -width 80 -anchor e -stretch 0
@@ -152,10 +190,13 @@ bind .e <<TreeviewSelect>> {dt extselect}
 
 # Treemap
 ttk::frame .tmf
+ttk::frame .tmf.top
 ttk::label .tmf.z -textvariable ::zoomText -padding {6 2}
+ttk::frame .tmf.legend
+pack .tmf.z -in .tmf.top -side left -fill x -expand 1
 canvas .tmf.c -background #1e1e1e -highlightthickness 0 -height 80
 .tmf.c create image 0 0 -anchor nw -image tmimg
-pack .tmf.z -fill x
+pack .tmf.top -fill x
 pack .tmf.c -fill both -expand 1
 bind .tmf.c <Configure> {dt resize}
 bind .tmf.c <Motion> {dt hover %x %y}
@@ -172,6 +213,24 @@ pack .tb -side top -fill x
 pack .sb -side bottom -fill x
 pack .pv -fill both -expand 1
 
+# Yaş renk açıklaması: dt legend {renk etiket ...} ile doldurulur.
+proc buildLegend {items} {
+    foreach w [winfo children .tmf.legend] { destroy $w }
+    ttk::label .tmf.legend.t -text [T "Last change:"]
+    pack .tmf.legend.t -side left -padx {0 4}
+    set i 0
+    foreach {color label} $items {
+        label .tmf.legend.c$i -text "■" -foreground $color -padx 0
+        ttk::label .tmf.legend.l$i -text $label
+        pack .tmf.legend.c$i .tmf.legend.l$i -side left
+        incr i
+    }
+}
+
+proc showLegend {on} {
+    if {$on} { pack .tmf.legend -in .tmf.top -side right -padx 6 } else { pack forget .tmf.legend }
+}
+
 # Koyu/açık palet: ttk (clam) stilleri ve klasik Tk bileşenleri (menüler, iletişim kutuları).
 proc applyPalette {dark} {
     if {$dark} {
@@ -186,7 +245,7 @@ proc applyPalette {dark} {
         -bordercolor $c(border) -lightcolor $c(btn) -darkcolor $c(btn) -troughcolor $c(base) \
         -selectbackground $c(sel) -selectforeground #ffffff -insertcolor $c(fg) -focuscolor $c(sel)
     ttk::style map . -background [list disabled $c(bg) active $c(hover)] -foreground [list disabled $c(dis)]
-    ttk::style configure TButton -background $c(btn) -padding {8 3}
+    ttk::style configure TButton -background $c(btn) -padding {8 3} -width -4
     ttk::style map TButton -background [list disabled $c(bg) pressed $c(border) active $c(hover)]
     ttk::style configure TMenubutton -background $c(btn) -arrowcolor $c(fg)
     ttk::style map TMenubutton -background [list active $c(hover)]
@@ -201,8 +260,10 @@ proc applyPalette {dark} {
     ttk::style configure TProgressbar -background $c(sel) -troughcolor $c(base)
     ttk::style configure TPanedwindow -background $c(bg)
     ttk::style configure Sash -sashthickness 6 -gripcount 0 -background $c(bg)
+    ttk::style configure Dim.TLabel -foreground $c(dis)
+    ttk::style configure Title.TLabel -font {TkDefaultFont 13 bold}
     .t tag configure mount -foreground $c(dis)
-    foreach m {.tb.gmin.m .tb.theme.m} { $m configure -background $c(btn) -foreground $c(fg) -activebackground $c(sel) -activeforeground #ffffff -selectcolor $c(sel) }
+    foreach m {.tb.theme.m .tb.theme.m.gmin .tb.file.m .tb.tools.m} { $m configure -background $c(btn) -foreground $c(fg) -activebackground $c(sel) -activeforeground #ffffff -selectcolor $c(sel) }
 }
 
 proc toggleTreemap {} {
@@ -220,55 +281,67 @@ bind . <Control-c> {dt act copy}
 bind . <Control-q> {dt act quit}
 bind . <Control-0> {dt act zoomroot}
 bind . <Control-plus> {dt act zoomin}
+bind . <Control-f> {dt act find}
+bind . <Control-s> {dt act savesnap}
+bind . <F8> {set ::age [expr {!$::age}]; dt act age}
 bind . <F9> {set ::showtm [expr {!$::showtm}]; toggleTreemap}
 bind . <Control-g> {set ::group [expr {!$::group}]; dt act group}
 
-proc showMenu {X Y isDir isMount isGroup hasParent busy} {
+proc showMenu {X Y isDir isMount isGroup hasParent busy pacman} {
     destroy .ctx
     menu .ctx
     set st [expr {$busy ? "disabled" : "normal"}]
-    .ctx add command -label "Aç" -command {dt nact open}
-    .ctx add command -label "Dosya yöneticisinde göster" -command {dt nact reveal}
-    .ctx add command -label "Yolu kopyala" -command {dt nact copy}
+    .ctx add command -label [T "Open"] -command {dt nact open}
+    .ctx add command -label [T "Show in file manager"] -command {dt nact reveal}
+    .ctx add command -label [T "Copy path"] -command {dt nact copy}
+    if {$pacman && !$isGroup} {
+        .ctx add command -label [T "Which package owns this?"] -command {dt nact package}
+    }
     if {$isDir} {
         .ctx add separator
-        .ctx add command -label "Treemap'te yakınlaştır" -command {dt nact zoom}
-        set lbl [expr {$isGroup ? "Bulunduğu klasörü yeniden tara" : $isMount ? "Bu dosya sistemini de tara" : "Bu klasörü yeniden tara"}]
+        .ctx add command -label [T "Zoom into in treemap"] -command {dt nact zoom}
+        set lbl [expr {$isGroup ? [T "Rescan its folder"] : $isMount ? [T "Scan this file system too"] : [T "Rescan this folder"]}]
         .ctx add command -label $lbl -command {dt nact refresh} -state $st
     }
     if {$hasParent} {
         .ctx add separator
-        .ctx add command -label "Çöp kutusuna taşı" -command {dt nact trash} -state $st
-        .ctx add command -label "Kalıcı olarak sil…" -command {dt nact delete} -state $st
+        .ctx add command -label [T "Move to trash"] -command {dt nact trash} -state $st
+        .ctx add command -label [T "Delete permanently…"] -command {dt nact delete} -state $st
     }
     tk_popup .ctx $X $Y
 }
 
 proc confirm {title detail} {
-    set r [tk_messageBox -parent . -icon warning -type yesno -default no -title TuxDirStat -message $title -detail $detail]
+    set r [tk_messageBox -parent [focus] -icon warning -type yesno -default no -title TuxDirStat -message $title -detail $detail]
     return [expr {$r eq "yes"}]
 }
 
 proc showError {title detail} {
-    tk_messageBox -parent . -icon warning -type ok -title TuxDirStat -message $title -detail $detail
+    set p [focus]
+    if {$p eq ""} { set p . }
+    tk_messageBox -parent [winfo toplevel $p] -icon warning -type ok -title TuxDirStat -message $title -detail $detail
+}
+
+proc showInfo {detail} {
+    tk_messageBox -parent . -icon info -type ok -title TuxDirStat -message TuxDirStat -detail $detail
 }
 
 proc startDialog {} {
     set w .start
     destroy $w
     toplevel $w
-    wm title $w "TuxDirStat — Taranacak konum"
+    wm title $w "TuxDirStat — [T {Location to scan}]"
     wm transient $w .
-    wm geometry $w 720x400
+    wm geometry $w 720x420
     ttk::frame $w.f -padding 10
     pack $w.f -fill both -expand 1
-    ttk::label $w.f.l -text "Taramak istediğiniz konumu seçin:"
+    ttk::label $w.f.l -text [T "Choose what to scan:"]
     ttk::treeview $w.f.t -columns {fs used total pct} -show {tree headings} -selectmode browse
-    $w.f.t heading #0 -text "Konum" -anchor w
-    $w.f.t heading fs -text "Tür" -anchor w
-    $w.f.t heading used -text "Kullanılan" -anchor e
-    $w.f.t heading total -text "Toplam" -anchor e
-    $w.f.t heading pct -text "Doluluk" -anchor w
+    $w.f.t heading #0 -text [T "Location"] -anchor w
+    $w.f.t heading fs -text [T "Type"] -anchor w
+    $w.f.t heading used -text [T "Used"] -anchor e
+    $w.f.t heading total -text [T "Total"] -anchor e
+    $w.f.t heading pct -text [T "Usage"] -anchor w
     $w.f.t column #0 -width 280
     $w.f.t column fs -width 80 -stretch 0
     $w.f.t column used -width 90 -anchor e -stretch 0
@@ -281,17 +354,19 @@ proc startDialog {} {
     set first [lindex [$w.f.t children {}] 0]
     $w.f.t selection set $first
     $w.f.t focus $first
+    ttk::checkbutton $w.f.admin -text [T "Scan as administrator (read-only, asks for your password)"] -variable ::asadmin
     ttk::frame $w.f.b
-    ttk::button $w.f.b.pick -text "Klasör seç…" -command {
-        set d [tk_chooseDirectory -parent .start -title "Klasör seç" -initialdir [dt home] -mustexist 1]
-        if {$d ne ""} { destroy .start; dt scan $d }
+    ttk::button $w.f.b.pick -text [T "Choose folder…"] -command {
+        set d [tk_chooseDirectory -parent .start -title [T "Choose folder"] -initialdir [dt home] -mustexist 1]
+        if {$d ne ""} { destroy .start; dt scan $d $::asadmin }
     }
-    ttk::button $w.f.b.cancel -text "İptal" -command [list destroy $w]
-    ttk::button $w.f.b.ok -text "Tara" -command startDialogAccept
+    ttk::button $w.f.b.cancel -text [T "Cancel"] -command [list destroy $w]
+    ttk::button $w.f.b.ok -text [T "Scan"] -command startDialogAccept
     pack $w.f.b.pick -side left
     pack $w.f.b.ok $w.f.b.cancel -side right -padx 2
     pack $w.f.l -anchor w -pady {0 6}
     pack $w.f.b -side bottom -fill x -pady {8 0}
+    pack $w.f.admin -side bottom -anchor w -pady {6 0}
     pack $w.f.t -fill both -expand 1
     bind $w.f.t <Double-1> startDialogAccept
     bind $w <Return> startDialogAccept
@@ -304,12 +379,119 @@ proc startDialogAccept {} {
     if {$sel eq ""} return
     set path [lindex [.start.f.t item $sel -tags] 0]
     destroy .start
-    dt scan $path
+    dt scan $path $::asadmin
+}
+
+# Araç sonuç penceresi. rows: {kimlik üst metinler ipucu kalın} listesi; widths: sütun
+# genişlikleri (piksel), stretch: pencereyle birlikte esneyen sütun.
+proc showTable {title summary empty columns numeric widths stretch rows} {
+    set w .res
+    destroy $w
+    toplevel $w
+    wm title $w "TuxDirStat — $title"
+    wm transient $w .
+    wm geometry $w 980x560
+    ttk::frame $w.f -padding 10
+    pack $w.f -fill both -expand 1
+    ttk::label $w.f.title -text $title -style Title.TLabel
+    pack $w.f.title -anchor w
+    if {$summary ne ""} {
+        ttk::label $w.f.sum -text $summary -style Dim.TLabel -justify left -wraplength 940
+        pack $w.f.sum -anchor w -pady {2 6}
+    }
+    ttk::frame $w.f.b
+    pack $w.f.b -side bottom -fill x -pady {8 0}
+    ttk::button $w.f.b.close -text [T "Close"] -command [list destroy $w]
+    pack $w.f.b.close -side right
+    if {[llength $rows] == 0} {
+        ttk::label $w.f.empty -text $empty -style Dim.TLabel -anchor center
+        pack $w.f.empty -fill both -expand 1
+    } else {
+        set cols {}
+        for {set i 1} {$i < [llength $columns]} {incr i} { lappend cols c$i }
+        ttk::frame $w.f.lf
+        ttk::treeview $w.f.t -columns $cols -selectmode extended
+        $w.f.t heading #0 -text [lindex $columns 0] -anchor w
+        $w.f.t column #0 -width [lindex $widths 0] -stretch [expr {$stretch == 0}]
+        for {set i 1} {$i < [llength $columns]} {incr i} {
+            set a [expr {[lindex $numeric $i] ? "e" : "w"}]
+            $w.f.t heading c$i -text [lindex $columns $i] -anchor $a
+            $w.f.t column c$i -anchor $a -width [lindex $widths $i] -stretch [expr {$stretch == $i}]
+        }
+        $w.f.t tag configure bold -font {TkDefaultFont 10 bold}
+        foreach r $rows {
+            lassign $r id parent texts tip bold
+            $w.f.t insert $parent end -id $id -text [lindex $texts 0] -values [lrange $texts 1 end] -open 1 -tags [expr {$bold ? "bold" : ""}]
+        }
+        ttk::scrollbar $w.f.lf.ys -orient vertical -command [list $w.f.t yview]
+        $w.f.t configure -yscrollcommand [list $w.f.lf.ys set]
+        grid $w.f.t -in $w.f.lf -row 0 -column 0 -sticky nsew
+        grid $w.f.lf.ys -row 0 -column 1 -sticky ns
+        grid rowconfigure $w.f.lf 0 -weight 1
+        grid columnconfigure $w.f.lf 0 -weight 1
+        pack $w.f.lf -fill both -expand 1
+        foreach {b label cmd} [list show [T "Show in tree"] show reveal [T "Open folder"] reveal copy [T "Copy path"] copy trash [T "Move to trash"] trash] {
+            ttk::button $w.f.b.$b -text $label -command [list dt res $cmd]
+            pack $w.f.b.$b -side left -padx {0 4}
+        }
+        bind $w.f.t <<TreeviewSelect>> {dt res sel}
+        bind $w.f.t <Double-1> {dt res show}
+        dt res sel
+    }
+    bind $w <Escape> [list destroy $w]
+    update idletasks
+    catch {grab $w}
+}
+
+proc resSelection {} { return [.res.f.t selection] }
+
+proc jobDialog {title} {
+    set w .job
+    destroy $w
+    toplevel $w
+    wm title $w "TuxDirStat — $title"
+    wm transient $w .
+    wm protocol $w WM_DELETE_WINDOW {dt job cancel}
+    ttk::frame $w.f -padding 12
+    pack $w.f -fill both -expand 1
+    ttk::label $w.f.l -text $title -width 70
+    ttk::progressbar $w.f.p -mode indeterminate -length 480 -maximum 1000
+    ttk::button $w.f.c -text [T "Cancel"] -command {dt job cancel}
+    pack $w.f.l -anchor w
+    pack $w.f.p -fill x -pady 8
+    pack $w.f.c -anchor e
+    $w.f.p start 10
+    update idletasks
+    catch {grab $w}
+}
+
+proc findDialog {help} {
+    set w .find
+    destroy $w
+    toplevel $w
+    wm title $w "TuxDirStat — [T {Find files}]"
+    wm transient $w .
+    ttk::frame $w.f -padding 10
+    pack $w.f -fill both -expand 1
+    ttk::entry $w.f.e -textvariable ::query -width 60
+    label $w.f.h -text $help -justify left -font TkFixedFont -anchor w
+    ttk::frame $w.f.b
+    ttk::button $w.f.b.ok -text [T "Find"] -command {dt find $::query}
+    ttk::button $w.f.b.cancel -text [T "Cancel"] -command [list destroy $w]
+    pack $w.f.b.ok $w.f.b.cancel -side right -padx 2
+    pack $w.f.e -fill x
+    pack $w.f.h -fill x -pady 8
+    pack $w.f.b -fill x
+    bind $w.f.e <Return> {dt find $::query}
+    bind $w <Escape> [list destroy $w]
+    focus $w.f.e
+    update idletasks
+    catch {grab $w}
 }
 )TCL";
 
 enum Col { C_NAME, C_BAR, C_PCT, C_SIZE, C_ITEMS, C_FILES, C_DIRS, C_MTIME, NCOLS };
-const char *const HEADINGS[NCOLS] = {"Ad", "Alt ağaç", "%", "Boyut", "Öğe", "Dosya", "Klasör", "Son değişiklik"};
+const char *const HEADINGS[NCOLS] = {N_("Name"), N_("Subtree"), "%", N_("Size"), N_("Items"), N_("Files"), N_("Folders"), N_("Modified")};
 const char *const HEADING_IDS[NCOLS] = {"#0", "bar", "pct", "size", "items", "files", "dirs", "mtime"};
 const SortKey COL_KEYS[NCOLS] = {SortKey::Name, SortKey::Size, SortKey::Size, SortKey::Size,
                                  SortKey::Items, SortKey::Files, SortKey::Dirs, SortKey::MTime};
@@ -366,6 +548,8 @@ public:
     explicit TkApp(Tcl_Interp *in) : in_(in) {}
     static int command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[]);
     void startScan(const std::string &path, Node *target = nullptr);
+    void startPrivilegedScan(const std::string &path);
+    void openSnapshot(const std::string &file);
     void showStartDialog() { eval("startDialog"); }
 
 private:
@@ -383,6 +567,7 @@ private:
     void setState(const char *widget, bool on) { call({S(widget), S("configure"), S("-state"), S(on ? "normal" : "disabled")}); }
 
     // tarama
+    void beginBusy(const std::string &title);
     static void pollTimer(ClientData cd);
     void poll();
 
@@ -422,6 +607,22 @@ private:
     void refreshNode(Node *n);
     void rebuildTree(Node *select);
     void regroup(bool on, uint32_t minCount);
+    bool removeNow(Node *n, bool permanent, std::string *err);
+
+    // araçlar
+    bool toolReady();
+    void showTable(ResultTable t);
+    void resAction(const std::string &what);
+    std::vector<int> resSelected();
+    void runTool(const char *title, std::function<void(Job &)> fn);
+    static void jobTimer(ClientData cd);
+    void jobPoll();
+    std::string chooseFile(bool save, const std::string &title, const std::string &initial, bool csv);
+    bool colorByAge() { return varBool("::age"); }
+    ResultTable table_;
+    std::vector<bool> gone_;
+    std::unique_ptr<Job> job_;
+    Tcl_TimerToken jobToken_ = nullptr;
 
 public:
     void applySettings();
@@ -468,10 +669,34 @@ void TkApp::startScan(const std::string &path, Node *target)
     std::free(real);
     s_.oneFs = varBool("::onefs");
     s_.startScan(abs, target);
+    beginBusy(target ? std::string() : abs);
+}
+
+void TkApp::startPrivilegedScan(const std::string &path)
+{
+    char *real = realpath(path.c_str(), nullptr);
+    const std::string abs = real ? real : path;
+    std::free(real);
+    s_.oneFs = varBool("::onefs");
+    s_.startPrivilegedScan(abs);
+    beginBusy(abs);
+}
+
+void TkApp::openSnapshot(const std::string &file)
+{
+    char *real = realpath(file.c_str(), nullptr);
+    const std::string abs = real ? real : file;
+    std::free(real);
+    s_.openSnapshot(abs);
+    beginBusy(abs.substr(abs.rfind('/') + 1));
+}
+
+void TkApp::beginBusy(const std::string &title)
+{
     setState(".tb.stop", true);
     eval("pack .sb.p -side right -padx 6; .sb.p start 10");
-    if (!target)
-        call({S("wm"), S("title"), S("."), S("TuxDirStat — " + abs)});
+    if (!title.empty())
+        call({S("wm"), S("title"), S("."), S("TuxDirStat — " + title)});
     if (!pollToken_)
         pollToken_ = Tcl_CreateTimerHandler(100, pollTimer, this);
 }
@@ -487,8 +712,7 @@ void TkApp::poll()
 {
     const Session::Result res = s_.poll();
     if (res == Session::Result::Running) {
-        setVar("::statusL", "Taranıyor… " + fmtInt(s_.progressCount()) + " öğe · " + fmtSize(s_.progressBytes()) +
-                                " · " + s_.progressPath());
+        setVar("::statusL", s_.progressText());
         pollToken_ = Tcl_CreateTimerHandler(100, pollTimer, this);
         return;
     }
@@ -497,10 +721,12 @@ void TkApp::poll()
     switch (res) {
     case Session::Result::Failed:
         setVar("::statusL", "");
-        call({S("showError"), S("Tarama başarısız"), S(s_.error())});
+        call({S("showError"), S(T("The scan failed:")), S(s_.error())});
+        if (s_.root())
+            call({S("wm"), S("title"), S("."), S("TuxDirStat — " + s_.root()->path())});
         return;
     case Session::Result::Cancelled:
-        setVar("::statusL", "Tarama durduruldu.");
+        setVar("::statusL", T("Scan stopped."));
         return;
     case Session::Result::NewTree: {
         Node *root = s_.pendingRoot();
@@ -508,6 +734,7 @@ void TkApp::poll()
         tmRoot_ = root;
         selected_ = hover_ = menuNode_ = nullptr;
         s_.commitNewTree();
+        call({S("wm"), S("title"), S("."), S("TuxDirStat — " + root->path())});
         rebuildTree(root);
         break;
     }
@@ -534,9 +761,7 @@ void TkApp::poll()
         return;
     }
     afterChange();
-    char secs[32];
-    std::snprintf(secs, sizeof secs, "%.2f", s_.elapsed());
-    setVar("::statusL", "Tarama tamamlandı: " + fmtInt(s_.lastCount()) + " öğe, " + secs + " sn.");
+    setVar("::statusL", TF("Done: %1 items in %2 s.", {fmtInt(s_.lastCount()), fmtDecimal(s_.elapsed(), 2)}));
 }
 
 // ───────────── ağaç ─────────────
@@ -630,7 +855,7 @@ void TkApp::resort()
 void TkApp::updateHeadings()
 {
     for (int c = 0; c < NCOLS; ++c) {
-        std::string t = HEADINGS[c];
+        std::string t = T(HEADINGS[c]);
         if (c == sortCol_)
             t += sortDesc_ ? "  ▼" : "  ▲";
         call({S(".t"), S("heading"), S(HEADING_IDS[c]), S("-text"), S(t)});
@@ -731,13 +956,14 @@ void TkApp::updateTotals()
         setVar("::statusR", "");
         return;
     }
-    setVar("::statusR", "Toplam: " + fmtSize(root->sizeOf(s_.apparent)) + " · " + fmtInt(root->files) + " dosya · " +
-                            fmtInt(root->dirs) + " klasör · Boş alan: " + fmtSize(freeSpace(root->path())));
+    setVar("::statusR", TF("Total: %1 · %2 files · %3 folders · Free: %4",
+                           {fmtSize(root->sizeOf(s_.apparent)), fmtInt(root->files), fmtInt(root->dirs),
+                            fmtSize(freeSpace(root->path()))}));
 }
 
 void TkApp::updateZoom()
 {
-    setVar("::zoomText", tmRoot_ ? "Treemap: " + tmRoot_->path() : std::string("Treemap"));
+    setVar("::zoomText", tmRoot_ ? std::string(T("Treemap")) + ": " + tmRoot_->path() : std::string(T("Treemap")));
     setState(".tb.zout", tmRoot_ && tmRoot_->parent);
 }
 
@@ -777,6 +1003,7 @@ void TkApp::render()
     eval("list [winfo width .tmf.c] [winfo height .tmf.c]");
     int w = 0, h = 0;
     std::sscanf(result().c_str(), "%d %d", &w, &h);
+    tm_.setColorMode(colorByAge() ? ColorMode::Age : ColorMode::Extension);
     tm_.render(tmRoot_, w, h, s_.apparent, s_.colors);
     compose();
 }
@@ -879,12 +1106,89 @@ void TkApp::action(const std::string &a)
     } else if (a == "onefs") {
         s_.oneFs = varBool("::onefs");
         saveSettings();
+    } else if (a == "age") {
+        tm_.forgetNodes();
+        scheduleRender(0);
+        call({S("showLegend"), S(colorByAge() ? "1" : "0")});
+        saveSettings();
+    } else if (a == "lang") {
+        saveSettings();
+        call({S("showInfo"), S(T("The new language is used after TuxDirStat is restarted."))});
+    } else if (a == "opensnap") {
+        if (!s_.scanning()) {
+            const std::string f = chooseFile(false, T("Open snapshot"), "", false);
+            if (!f.empty())
+                openSnapshot(f);
+        }
+    } else if (a == "savesnap") {
+        if (toolReady()) {
+            std::string name = s_.root()->path();
+            name = name.substr(name.rfind('/') + 1);
+            char day[16];
+            time_t now = time(nullptr);
+            struct tm tm;
+            localtime_r(&now, &tm);
+            std::strftime(day, sizeof day, "%Y-%m-%d", &tm);
+            std::string f = chooseFile(true, T("Save snapshot"), (name.empty() ? "root" : name) + "-" + day + ".json", false);
+            std::string err;
+            if (!f.empty()) {
+                if (f.find('.', f.rfind('/') + 1) == std::string::npos)
+                    f += ".json";
+                if (!saveSnapshot(s_.root(), f, &err))
+                    call({S("showError"), S(T("Could not save the snapshot:")), S(err)});
+                else
+                    setVar("::statusL", TF("Snapshot saved: %1", {f}));
+            }
+        }
+    } else if (a == "csv") {
+        if (toolReady()) {
+            const std::string f = chooseFile(true, T("Export as CSV"), "tuxdirstat.csv", true);
+            std::string err;
+            if (!f.empty()) {
+                if (!exportCsv(s_.root(), f, &err))
+                    call({S("showError"), S(T("Could not write the file:")), S(err)});
+                else
+                    setVar("::statusL", TF("Exported: %1", {f}));
+            }
+        }
+    } else if (a == "find") {
+        if (toolReady())
+            call({S("findDialog"), S(searchHelp())});
+    } else if (a == "dup") {
+        Node *root = s_.root();
+        runTool(T("Duplicate files"), [root](Job &j) { j.result = findDuplicates(root, j); });
+    } else if (a == "cleanup") {
+        Node *root = s_.root();
+        const bool ap = s_.apparent;
+        runTool(T("Cleanup suggestions"), [root, ap](Job &j) { j.result = findCleanup(root, ap, j); });
+    } else if (a == "owners") {
+        if (toolReady())
+            showTable(ownerUsage(s_.root(), s_.apparent));
+    } else if (a == "unowned") {
+        if (!havePacman()) {
+            call({S("showError"), S(T("pacman was not found; --unowned works on Arch-based systems.")), S("")});
+        } else {
+            Node *root = s_.root();
+            const bool ap = s_.apparent;
+            runTool(T("Files no package owns"), [root, ap](Job &j) { j.result = findUnowned(root, ap, j); });
+        }
+    } else if (a == "compare") {
+        if (toolReady()) {
+            const std::string f = chooseFile(false, T("Compare with snapshot"), "", false);
+            if (!f.empty()) {
+                Node *root = s_.root();
+                const bool ap = s_.apparent;
+                runTool(T("Compare with snapshot"), [root, ap, f](Job &j) { j.result = compareWithSnapshot(root, f, ap, j); });
+            }
+        }
     } else if (a == "about") {
         call({S("tk_messageBox"), S("-parent"), S("."), S("-icon"), S("info"), S("-title"), S("TuxDirStat"), S("-message"),
-              S("TuxDirStat"), S("-detail"),
-              S("Linux için disk kullanım analizörü.\n\nAğaçta veya treemap'te bir öğeye tıklayın; treemap'te çift "
-                "tıklayarak klasöre yakınlaşın, Backspace ile geri çıkın. Uzantı listesinde bir satır seçmek o "
-                "türdeki dosyaları treemap'te işaretler.")});
+              S("TuxDirStat " TUXDIRSTAT_VERSION), S("-detail"),
+              S(std::string(T("Disk usage analyzer for Linux.")) + "\n\n" +
+                T("Click an item in the tree or the treemap. Double-click in the treemap to zoom into a "
+                  "folder, Backspace goes back. Selecting a row in the extension list marks those files "
+                  "in the treemap.") +
+                "\n\n" + T("License: GPL-3.0-or-later") + "\nhttps://github.com/Gubir34/TuxDirStat")});
     } else if (a == "quit") {
         s_.cancelScan();
         if (pollToken_)
@@ -909,6 +1213,8 @@ void TkApp::nodeAction(const std::string &a)
         copyPath(n);
     else if (a == "zoom")
         zoomTo(n);
+    else if (a == "package")
+        call({S("showInfo"), S(packageOwnerMessage(n->path()))});
     else if (a == "refresh")
         refreshNode(n);
     else if (a == "trash" || a == "delete")
@@ -919,7 +1225,8 @@ void TkApp::popupMenu(Node *n, int X, int Y)
 {
     menuNode_ = n;
     call({S("showMenu"), Tcl_NewIntObj(X), Tcl_NewIntObj(Y), Tcl_NewIntObj(n->isDir), Tcl_NewIntObj((n->flags & F_MOUNT) != 0),
-          Tcl_NewIntObj((n->flags & F_GROUP) != 0), Tcl_NewIntObj(n->parent != nullptr), Tcl_NewIntObj(s_.scanning())});
+          Tcl_NewIntObj((n->flags & F_GROUP) != 0), Tcl_NewIntObj(n->parent != nullptr), Tcl_NewIntObj(s_.scanning()),
+          Tcl_NewIntObj(havePacman())});
 }
 
 void TkApp::copyPath(Node *n)
@@ -961,7 +1268,6 @@ void TkApp::regroup(bool on, uint32_t minCount)
     tm_.forgetNodes();
     selected_ = hover_ = menuNode_ = nullptr;
     s_.setGrouping(on, minCount);
-    setVar("::groupMinText", "Eşik: " + std::to_string(minCount));
     saveSettings();
     tmRoot_ = zoom ? zoom : s_.root();
     rebuildTree(sel);
@@ -974,15 +1280,21 @@ void TkApp::deleteNode(Node *n, bool permanent)
     if (!n->parent || s_.scanning())
         return;
     const std::string path = n->path();
-    const std::string kind = (n->flags & F_GROUP) ? "gruptaki " + fmtInt(n->files) + " dosyayı"
-                             : n->isDir           ? "klasörü"
-                                                  : "dosyayı";
-    const std::string title = permanent ? "Bu " + kind + " kalıcı olarak silmek istediğinize emin misiniz?"
-                                        : "Bu " + kind + " çöp kutusuna taşınsın mı?";
+    const std::string kind = (n->flags & F_GROUP) ? TF("the %1 files in this group", {fmtInt(n->files)})
+                             : n->isDir           ? T("this folder")
+                                                  : T("this file");
+    const std::string title = permanent ? TF("Delete %1 permanently?", {kind}) : TF("Move %1 to the trash?", {kind});
     const std::string detail = path + "\n(" + fmtSize(n->sizeOf(s_.apparent)) + ")" +
-                               (permanent ? "\n\nBu işlem geri alınamaz." : "");
+                               (permanent ? std::string("\n\n") + T("This cannot be undone.") : "");
     if (call({S("confirm"), S(title), S(detail)}) != TCL_OK || result() != "1")
         return;
+    std::string err;
+    if (!removeNow(n, permanent, &err))
+        call({S("showError"), S(T("Could not delete (or only partly deleted):")), S(err)});
+}
+
+bool TkApp::removeNow(Node *n, bool permanent, std::string *errOut)
+{
     std::string err, firstFailed;
     int failed = 0;
     for (const std::string &p : diskPaths(n)) {
@@ -1005,9 +1317,10 @@ void TkApp::deleteNode(Node *n, bool permanent)
             firstFailed = p;
     }
     if (failed) {
-        call({S("showError"), S("Silinemedi (ya da yalnızca kısmen silindi)"), S(firstFailed + "\n\n" + err)});
+        if (errOut)
+            *errOut = firstFailed + "\n\n" + err;
         refreshNode(n->parent);  // ağacı diskle eşitle
-        return;
+        return false;
     }
     n = s_.removalTarget(n);  // grubun son öğesiyse grup da kalkar
     Node *p = n->parent;
@@ -1021,6 +1334,249 @@ void TkApp::deleteNode(Node *n, bool permanent)
     forgetFilled(n);
     s_.remove(n);
     afterChange();
+    return true;
+}
+
+// ───────────── araçlar ─────────────
+
+bool TkApp::toolReady()
+{
+    if (s_.scanning()) {
+        call({S("showInfo"), S(T("Wait until the scan has finished."))});
+        return false;
+    }
+    if (!s_.root()) {
+        call({S("showInfo"), S(T("Scan a folder first."))});
+        return false;
+    }
+    return true;
+}
+
+std::string TkApp::chooseFile(bool save, const std::string &title, const std::string &initial, bool csv)
+{
+    Tcl_Obj *types = Tcl_NewListObj(0, nullptr);
+    auto addType = [&](const char *name, std::initializer_list<const char *> pats) {
+        Tcl_Obj *t = Tcl_NewListObj(0, nullptr);
+        Tcl_ListObjAppendElement(nullptr, t, S(name));
+        Tcl_Obj *p = Tcl_NewListObj(0, nullptr);
+        for (const char *x : pats)
+            Tcl_ListObjAppendElement(nullptr, p, S(x));
+        Tcl_ListObjAppendElement(nullptr, t, p);
+        Tcl_ListObjAppendElement(nullptr, types, t);
+    };
+    if (csv)
+        addType(T("CSV files"), {".csv"});
+    else
+        addType(T("Snapshots (JSON)"), {".json", ".gz", ".zst", ".xz"});
+    addType(T("All files"), {"*"});
+    std::vector<Tcl_Obj *> args{S(save ? "tk_getSaveFile" : "tk_getOpenFile"), S("-parent"), S("."), S("-title"), S(title),
+                                S("-initialdir"), S(homeDir()), S("-filetypes"), types};
+    if (save && !initial.empty()) {
+        args.push_back(S("-initialfile"));
+        args.push_back(S(initial));
+    }
+    for (Tcl_Obj *o : args)
+        Tcl_IncrRefCount(o);
+    const int rc = Tcl_EvalObjv(in_, int(args.size()), args.data(), TCL_EVAL_GLOBAL);
+    for (Tcl_Obj *o : args)
+        Tcl_DecrRefCount(o);
+    return rc == TCL_OK ? result() : std::string();
+}
+
+void TkApp::showTable(ResultTable t)
+{
+    table_ = std::move(t);
+    gone_.assign(table_.rows.size(), false);
+    auto list = [](const std::vector<std::string> &v) {
+        Tcl_Obj *l = Tcl_NewListObj(0, nullptr);
+        for (const std::string &x : v)
+            Tcl_ListObjAppendElement(nullptr, l, S(x));
+        return l;
+    };
+    std::vector<std::string> numeric, widths;
+    // Genişlikler metin uzunluğundan kestirilir; en uzun metinli sütun esner.
+    size_t stretch = 0, best = 0;
+    for (size_t c = 0; c < table_.columns.size(); ++c) {
+        const bool num = c < table_.numeric.size() && table_.numeric[c];
+        numeric.push_back(num ? "1" : "0");
+        size_t maxLen = table_.columns[c].size(), total = 0;
+        for (const ResultRow &r : table_.rows)
+            if (c < r.cells.size()) {
+                maxLen = std::max(maxLen, r.cells[c].size());
+                total += r.cells[c].size();
+            }
+        widths.push_back(std::to_string(std::clamp<size_t>(maxLen * 8 + 24, 70, 340)));
+        if (!num && total > best) {
+            best = total;
+            stretch = c;
+        }
+    }
+    widths[stretch] = "380";
+    Tcl_Obj *rows = Tcl_NewListObj(0, nullptr);
+    int lastGroup = -1;
+    for (size_t i = 0; i < table_.rows.size(); ++i) {
+        const ResultRow &r = table_.rows[i];
+        std::string parent;
+        if (table_.grouped) {
+            parent = "g" + std::to_string(r.group);
+            if (r.group != lastGroup) {
+                int n = 0;
+                for (const ResultRow &o : table_.rows)
+                    n += o.group == r.group;
+                std::vector<std::string> texts{TF("Set %1 · %2 × %3", {std::to_string(r.group), std::to_string(n), fmtSize(r.bytes)})};
+                Tcl_Obj *g = Tcl_NewListObj(0, nullptr);
+                for (Tcl_Obj *o : {S(parent), S(""), list(texts), S(""), S("1")})
+                    Tcl_ListObjAppendElement(nullptr, g, o);
+                Tcl_ListObjAppendElement(nullptr, rows, g);
+                lastGroup = r.group;
+            }
+        }
+        Tcl_Obj *row = Tcl_NewListObj(0, nullptr);
+        for (Tcl_Obj *o : {S("r" + std::to_string(i)), S(parent), list(r.cells), S(r.command.empty() ? r.path : r.command), S("0")})
+            Tcl_ListObjAppendElement(nullptr, row, o);
+        Tcl_ListObjAppendElement(nullptr, rows, row);
+    }
+    call({S("showTable"), S(table_.title), S(table_.summary), S(table_.emptyText), list(table_.columns), list(numeric),
+          list(widths), Tcl_NewIntObj(int(stretch)), rows});
+}
+
+std::vector<int> TkApp::resSelected()
+{
+    std::vector<int> v;
+    if (call({S("resSelection")}) != TCL_OK)
+        return v;
+    Tcl_Obj *res = Tcl_GetObjResult(in_);
+    TclSize n = 0;
+    Tcl_Obj **items = nullptr;
+    if (Tcl_ListObjGetElements(in_, res, &n, &items) != TCL_OK)
+        return v;
+    for (TclSize i = 0; i < n; ++i) {
+        const char *id = Tcl_GetString(items[i]);
+        if (id[0] == 'r') {
+            const int r = std::atoi(id + 1);
+            if (r >= 0 && size_t(r) < gone_.size() && !gone_[size_t(r)])
+                v.push_back(r);
+        }
+    }
+    return v;
+}
+
+void TkApp::resAction(const std::string &what)
+{
+    const std::vector<int> rows = resSelected();
+    const ResultRow *one = rows.size() == 1 ? &table_.rows[size_t(rows[0])] : nullptr;
+    Node *root = s_.root();
+    if (what == "sel") {
+        auto state = [&](const char *b, bool on) {
+            call({S(std::string(".res.f.b.") + b), S("configure"), S("-state"), S(on ? "normal" : "disabled")});
+        };
+        state("show", one && one->node && root && one->node->isWithin(root));
+        state("reveal", one && !one->path.empty() && one->path[0] == '/');
+        state("copy", !rows.empty());
+        call({S(".res.f.b.copy"), S("configure"), S("-text"), S(one && !one->command.empty() ? T("Copy command") : T("Copy path"))});
+        bool del = !rows.empty();
+        for (int r : rows)
+            del = del && table_.rows[size_t(r)].deletable && !table_.rows[size_t(r)].path.empty();
+        state("trash", del);
+    } else if (what == "show") {
+        if (one && one->node && root && one->node->isWithin(root)) {
+            Node *n = one->node;
+            eval("destroy .res");
+            selectNode(n);
+        }
+    } else if (what == "reveal") {
+        if (one)
+            revealPath(one->path);
+    } else if (what == "copy") {
+        std::string text;
+        for (int r : rows) {
+            const ResultRow &row = table_.rows[size_t(r)];
+            text += (text.empty() ? "" : "\n") + (row.command.empty() ? row.path : row.command);
+        }
+        eval("clipboard clear");
+        call({S("clipboard"), S("append"), S("--"), S(text)});
+    } else if (what == "trash") {
+        if (rows.empty())
+            return;
+        uint64_t bytes = 0;
+        for (int r : rows)
+            bytes += table_.rows[size_t(r)].bytes;
+        if (call({S("confirm"), S(TF("Move %1 items (%2) to the trash?", {fmtInt(rows.size()), fmtSize(bytes)})),
+                  S(deletionWarning(table_, rows))}) != TCL_OK || result() != "1")
+            return;
+        int failed = 0;
+        std::string firstErr;
+        for (int r : rows) {
+            const ResultRow &row = table_.rows[size_t(r)];
+            std::string err;
+            bool ok;
+            if (!g_file_test(row.path.c_str(), G_FILE_TEST_EXISTS) && !g_file_test(row.path.c_str(), G_FILE_TEST_IS_SYMLINK)) {
+                ok = true;  // daha önce silinen bir klasörün içindeydi
+            } else if (row.node && s_.root() && row.node->isWithin(s_.root())) {
+                ok = removeNow(row.node, false, &err);
+            } else {
+                GFile *f = g_file_new_for_path(row.path.c_str());
+                ok = g_file_trash(f, nullptr, nullptr) || trashWithCommand(row.path);
+                g_object_unref(f);
+                err = row.path;
+            }
+            if (ok) {
+                gone_[size_t(r)] = true;
+                call({S(".res.f.t"), S("delete"), S("r" + std::to_string(r))});
+            } else if (!failed++) {
+                firstErr = err;
+            }
+        }
+        // Tek üyesi kalan kopya kümelerini kaldır.
+        if (table_.grouped)
+            eval("foreach g [.res.f.t children {}] { if {[llength [.res.f.t children $g]] < 2} { .res.f.t delete $g } }");
+        resAction("sel");
+        if (failed)
+            call({S("showError"), S(TF("%1 items could not be moved to the trash.", {std::to_string(failed)})), S(firstErr)});
+    }
+}
+
+void TkApp::runTool(const char *title, std::function<void(Job &)> fn)
+{
+    if (!toolReady() || job_)
+        return;
+    job_ = std::make_unique<Job>(title, std::move(fn));
+    call({S("jobDialog"), S(title)});
+    job_->start();
+    jobToken_ = Tcl_CreateTimerHandler(100, jobTimer, this);
+}
+
+void TkApp::jobTimer(ClientData cd)
+{
+    auto *a = static_cast<TkApp *>(cd);
+    a->jobToken_ = nullptr;
+    a->jobPoll();
+}
+
+void TkApp::jobPoll()
+{
+    if (!job_)
+        return;
+    const double f = job_->progress();
+    if (f >= 0) {
+        eval(".job.f.p stop; .job.f.p configure -mode determinate");
+        call({S(".job.f.p"), S("configure"), S("-value"), Tcl_NewIntObj(int(f * 1000))});
+    }
+    const std::string st = job_->status();
+    if (!st.empty())
+        call({S(".job.f.l"), S("configure"), S("-text"), S(st)});
+    if (!job_->done()) {
+        jobToken_ = Tcl_CreateTimerHandler(100, jobTimer, this);
+        return;
+    }
+    eval("destroy .job");
+    std::unique_ptr<Job> j = std::move(job_);
+    if (j->cancelled())
+        return;
+    if (!j->error.empty() && j->result.rows.empty())
+        call({S("showError"), S(j->error), S("")});
+    else
+        showTable(std::move(j->result));
 }
 
 // ───────────── ayarlar ─────────────
@@ -1037,10 +1593,18 @@ void TkApp::applySettings()
     setVar("::onefs", st.oneFs ? "1" : "0");
     setVar("::group", st.grouping ? "1" : "0");
     setVar("::groupmin", std::to_string(st.groupMin));
-    setVar("::groupMinText", "Eşik: " + std::to_string(st.groupMin));
     setVar("::showtm", st.showTreemap ? "1" : "0");
     setVar("::theme", st.theme);
+    setVar("::lang", st.language);
+    setVar("::age", st.colorByAge ? "1" : "0");
     call({S("applyPalette"), S(wantsDark(st.theme) ? "1" : "0")});
+    Tcl_Obj *legend = Tcl_NewListObj(0, nullptr);
+    for (const AgeBucket &b : ageBuckets()) {
+        Tcl_ListObjAppendElement(nullptr, legend, S(colorHex(b.color)));
+        Tcl_ListObjAppendElement(nullptr, legend, S(T(b.label)));
+    }
+    call({S("buildLegend"), legend});
+    call({S("showLegend"), S(st.colorByAge ? "1" : "0")});
     if (!st.showTreemap)
         eval("toggleTreemap");
     applyingSettings_ = false;
@@ -1058,6 +1622,9 @@ void TkApp::saveSettings()
     st.showTreemap = varBool("::showtm");
     if (const char *t = Tcl_GetVar(in_, "::theme", TCL_GLOBAL_ONLY))
         st.theme = t;
+    if (const char *l = Tcl_GetVar(in_, "::lang", TCL_GLOBAL_ONLY))
+        st.language = l;
+    st.colorByAge = varBool("::age");
     st.save();
 }
 
@@ -1067,13 +1634,17 @@ int TkApp::command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[
 {
     auto *a = static_cast<TkApp *>(cd);
     if (objc < 2) {
-        Tcl_WrongNumArgs(in, 1, objv, "alt-komut ?argümanlar?");
+        Tcl_WrongNumArgs(in, 1, objv, "subcommand ?args?");
         return TCL_ERROR;
     }
     const std::string sub = Tcl_GetString(objv[1]);
     auto arg = [&](int i) -> std::string { return i < objc ? Tcl_GetString(objv[i]) : ""; };
     auto num = [&](int i) { return std::atoi(arg(i).c_str()); };
 
+    if (sub == "tr") {
+        Tcl_SetObjResult(in, S(T(Tcl_GetString(objv[2]))));
+        return TCL_OK;
+    }
     if (sub == "open") {
         if (Node *n = nodeOf(arg(2).c_str()); n && n->isDir && !a->filled_.count(n)) {
             a->call({S(".t"), S("delete"), S(dummyId(n))});
@@ -1139,7 +1710,7 @@ int TkApp::command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[
             Tcl_ListObjAppendElement(nullptr, list, r);
         };
         const std::string home = homeDir();
-        row({"Ev klasörü  (" + home + ")", home, "", "", "", ""});
+        row({TF("Home folder  (%1)", {home}), home, "", "", "", ""});
         for (const Drive &d : listDrives()) {
             const double f = double(d.used) / double(d.total);
             row({d.mp, d.mp, d.fs, fmtSize(d.used), fmtSize(d.total), textBar(f) + " " + fmtPct(f)});
@@ -1148,9 +1719,27 @@ int TkApp::command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[
     } else if (sub == "home") {
         Tcl_SetObjResult(in, S(homeDir()));
     } else if (sub == "scan") {
-        a->startScan(arg(2));
+        if (arg(3) == "1")
+            a->startPrivilegedScan(arg(2));
+        else
+            a->startScan(arg(2));
+    } else if (sub == "res") {
+        a->resAction(arg(2));
+    } else if (sub == "job") {
+        if (a->job_)
+            a->job_->cancel();
+    } else if (sub == "find") {
+        std::string err;
+        ResultTable t = searchTree(a->s_.root(), arg(2), a->s_.apparent, &err);
+        if (!err.empty()) {
+            a->call({S("showError"), S(err), S("")});
+        } else {
+            a->eval("destroy .find");
+            t.title += ": " + arg(2);
+            a->showTable(std::move(t));
+        }
     } else {
-        Tcl_SetObjResult(in, S("bilinmeyen alt komut: " + sub));
+        Tcl_SetObjResult(in, S("unknown subcommand: " + sub));
         return TCL_ERROR;
     }
     return TCL_OK;
@@ -1166,18 +1755,22 @@ int main(int argc, char **argv)
     Tcl_FindExecutable(argv[0]);
     Tcl_Interp *in = Tcl_CreateInterp();
     if (Tcl_Init(in) != TCL_OK || Tk_Init(in) != TCL_OK) {
-        std::fprintf(stderr, "Tcl/Tk başlatılamadı: %s\n", Tcl_GetStringResult(in));
+        std::fprintf(stderr, "Tcl/Tk could not be started: %s\n", Tcl_GetStringResult(in));
         return 1;
     }
     auto *app = new TkApp(in);
     Tcl_CreateObjCommand(in, "dt", TkApp::command, app, nullptr);
     if (Tcl_EvalEx(in, UI_SCRIPT, -1, TCL_EVAL_GLOBAL) != TCL_OK) {
-        std::fprintf(stderr, "Arayüz betiği hatası: %s\n%s\n", Tcl_GetStringResult(in),
+        std::fprintf(stderr, "UI script error: %s\n%s\n", Tcl_GetStringResult(in),
                      Tcl_GetVar(in, "errorInfo", TCL_GLOBAL_ONLY));
         return 1;
     }
     app->applySettings();
-    if (!path.empty())
+    Tcl_SetVar(in, "::iconFile", TUXDIRSTAT_DATADIR "/icons/hicolor/48x48/apps/tuxdirstat.png", TCL_GLOBAL_ONLY);
+    Tcl_EvalEx(in, "catch {wm iconphoto . -default [image create photo -file $::iconFile]}", -1, TCL_EVAL_GLOBAL);
+    if (!path.empty() && g_file_test(path.c_str(), G_FILE_TEST_IS_REGULAR))
+        app->openSnapshot(path);
+    else if (!path.empty())
         app->startScan(path);
     else
         app->showStartDialog();

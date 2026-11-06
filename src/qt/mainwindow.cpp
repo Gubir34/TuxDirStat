@@ -5,8 +5,10 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QDate>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -14,11 +16,14 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRadialGradient>
@@ -34,6 +39,7 @@
 #include <QVBoxLayout>
 
 #include "extinfo.h"
+#include "resultdialog.h"
 #include "theme.h"
 #include "treemap.h"
 #include "treemodel.h"
@@ -64,7 +70,7 @@ QIcon swatchIcon(const RGBf &c, int size = 16)
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
-    QColor col(std::min(255, int(c.r * 1.4f)), std::min(255, int(c.g * 1.4f)), std::min(255, int(c.b * 1.4f)));
+    const QColor col = displayColor(c);
     QRadialGradient g(size * 0.35, size * 0.35, size * 0.8);
     g.setColorAt(0, col.lighter(150));
     g.setColorAt(1, col.darker(160));
@@ -74,15 +80,20 @@ QIcon swatchIcon(const RGBf &c, int size = 16)
     return QIcon(pm);
 }
 
+const char *const SNAPSHOT_FILTER = N_("Snapshots (*.json *.json.gz *.json.zst *.json.xz);;All files (*)");
+
+}  // namespace
+
 bool moveToTrash(const QString &path)
 {
     return QFile::moveToTrash(path) || trashWithCommand(path.toStdString());
 }
 
-}  // namespace
-
 QIcon appIcon()
 {
+    QIcon themed = QIcon::fromTheme("tuxdirstat");
+    if (!themed.isNull())
+        return themed;
     QPixmap pm(64, 64);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
@@ -102,18 +113,18 @@ QIcon appIcon()
 
 TargetDialog::TargetDialog(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle("TuxDirStat — Taranacak konum");
-    resize(720, 400);
+    setWindowTitle("TuxDirStat — " + QT("Location to scan"));
+    resize(720, 420);
     auto *lay = new QVBoxLayout(this);
-    lay->addWidget(new QLabel("Taramak istediğiniz konumu seçin:"));
+    lay->addWidget(new QLabel(QT("Choose what to scan:")));
     list_ = new QTreeWidget;
-    list_->setHeaderLabels({"Konum", "Tür", "Kullanılan", "Toplam", "Doluluk"});
+    list_->setHeaderLabels({QT("Location"), QT("Type"), QT("Used"), QT("Total"), QT("Usage")});
     list_->setRootIsDecorated(false);
     list_->setAlternatingRowColors(true);
     QStyle *st = style();
 
     const QString home = QDir::homePath();
-    auto *it = new QTreeWidgetItem({QString("Ev klasörü  (%1)").arg(home)});
+    auto *it = new QTreeWidgetItem({QTF("Home folder  (%1)", {home.toStdString()})});
     it->setIcon(0, QIcon::fromTheme("user-home", st->standardIcon(QStyle::SP_DirHomeIcon)));
     it->setData(0, Qt::UserRole, home);
     list_->addTopLevelItem(it);
@@ -136,15 +147,19 @@ TargetDialog::TargetDialog(QWidget *parent) : QDialog(parent)
     list_->setCurrentItem(list_->topLevelItem(0));
     connect(list_, &QTreeWidget::itemDoubleClicked, this, [this] { accept_(); });
     lay->addWidget(list_);
+    admin_ = new QCheckBox(QT("Scan as administrator (read-only, asks for your password)"));
+    admin_->setToolTip(QT("Reads folders your user cannot open, such as /root or /var/lib. Deleting still uses your own rights."));
+    lay->addWidget(admin_);
 
     auto *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    btns->button(QDialogButtonBox::Ok)->setText("Tara");
-    btns->button(QDialogButtonBox::Cancel)->setText("İptal");
-    auto *pick = btns->addButton("Klasör seç…", QDialogButtonBox::ActionRole);
+    btns->button(QDialogButtonBox::Ok)->setText(QT("Scan"));
+    btns->button(QDialogButtonBox::Cancel)->setText(QT("Cancel"));
+    auto *pick = btns->addButton(QT("Choose folder…"), QDialogButtonBox::ActionRole);
     connect(pick, &QPushButton::clicked, this, [this] {
-        QString d = QFileDialog::getExistingDirectory(this, "Klasör seç", QDir::homePath());
+        QString d = QFileDialog::getExistingDirectory(this, QT("Choose folder"), QDir::homePath());
         if (!d.isEmpty()) {
             path = d;
+            admin = admin_->isChecked();
             accept();
         }
     });
@@ -157,6 +172,7 @@ void TargetDialog::accept_()
 {
     if (auto *it = list_->currentItem()) {
         path = it->data(0, Qt::UserRole).toString();
+        admin = admin_->isChecked();
         accept();
     }
 }
@@ -207,7 +223,7 @@ MainWindow::MainWindow(const QString &path)
 
     // Uzantılar
     extTable_ = new QTableWidget(0, 5);
-    extTable_->setHorizontalHeaderLabels({"Uzantı", "Tür", "Boyut", "%", "Dosya"});
+    extTable_->setHorizontalHeaderLabels({QT("Extension"), QT("Type"), QT("Size"), "%", QT("Files")});
     extTable_->verticalHeader()->hide();
     extTable_->verticalHeader()->setDefaultSectionSize(26);
     extTable_->setItemDelegate(new RowDelegate(extTable_));
@@ -290,10 +306,14 @@ MainWindow::MainWindow(const QString &path)
     updateZoomLabel();
     updateTotals();
 
-    if (!path.isEmpty())
-        QTimer::singleShot(0, this, [this, path] { startScan(path); });
-    else
+    if (!path.isEmpty()) {
+        if (QFileInfo(path).isFile())  // anlık görüntü dosyası
+            QTimer::singleShot(0, this, [this, path] { openSnapshot(path); });
+        else
+            QTimer::singleShot(0, this, [this, path] { startScan(path); });
+    } else {
         QTimer::singleShot(0, this, &MainWindow::chooseTarget);
+    }
 }
 
 MainWindow::~MainWindow()
@@ -316,72 +336,112 @@ QAction *MainWindow::act(const QString &text, const char *icon, const QKeySequen
 
 void MainWindow::buildActions()
 {
-    QAction *actOpen = act("Aç…", "document-open", QKeySequence("Ctrl+O"));
+    QAction *actOpen = act(QT("Open…"), "document-open", QKeySequence("Ctrl+O"));
     connect(actOpen, &QAction::triggered, this, &MainWindow::chooseTarget);
-    QAction *actRescan = act("Yeniden tara", "view-refresh", QKeySequence("F5"));
+    QAction *actRescan = act(QT("Rescan"), "view-refresh", QKeySequence("F5"));
     connect(actRescan, &QAction::triggered, this, &MainWindow::rescan);
-    actStop_ = act("Durdur", "process-stop", QKeySequence("Esc"));
+    actStop_ = act(QT("Stop"), "process-stop", QKeySequence("Esc"));
     actStop_->setEnabled(false);
     connect(actStop_, &QAction::triggered, this, [this] { session_.cancelScan(); });
+    QAction *actOpenSnap = act(QT("Open snapshot…"), "document-import");
+    connect(actOpenSnap, &QAction::triggered, this, &MainWindow::openSnapshotDialog);
+    QAction *actSaveSnap = act(QT("Save snapshot…"), "document-save-as", QKeySequence("Ctrl+S"));
+    connect(actSaveSnap, &QAction::triggered, this, &MainWindow::saveSnapshotDialog);
+    QAction *actCsv = act(QT("Export as CSV…"), "document-export");
+    connect(actCsv, &QAction::triggered, this, &MainWindow::exportCsvDialog);
 
-    QAction *actZoomIn = act("Yakınlaştır", "zoom-in", QKeySequence("Ctrl++"));
+    QAction *actZoomIn = act(QT("Zoom in"), "zoom-in", QKeySequence("Ctrl++"));
     connect(actZoomIn, &QAction::triggered, this, &MainWindow::zoomInSelected);
-    actZoomOut_ = act("Uzaklaştır", "zoom-out", QKeySequence("Backspace"));
+    actZoomOut_ = act(QT("Zoom out"), "zoom-out", QKeySequence("Backspace"));
     connect(actZoomOut_, &QAction::triggered, this, &MainWindow::zoomOut);
-    QAction *actZoomReset = act("Kök", "zoom-original", QKeySequence("Ctrl+0"));
+    QAction *actZoomReset = act(QT("Root"), "zoom-original", QKeySequence("Ctrl+0"));
     connect(actZoomReset, &QAction::triggered, this, [this] { zoomTo(rootNode()); });
 
-    actApparent_ = act("Görünür boyut", "view-statistics");
+    actApparent_ = act(QT("Apparent size"), "view-statistics");
     actApparent_->setCheckable(true);
-    actApparent_->setToolTip("Açık: dosyaların görünür boyutu (ls)\nKapalı: diskte kapladığı alan (du)");
+    actApparent_->setToolTip(QT("On: the apparent size of files (ls)\nOff: the space they take on disk (du)"));
     connect(actApparent_, &QAction::toggled, this, &MainWindow::setApparent);
-    actOneFs_ = act("Tek dosya sistemi", "drive-harddisk");
+    actOneFs_ = act(QT("One file system"), "drive-harddisk");
     actOneFs_->setCheckable(true);
     actOneFs_->setChecked(true);
-    actOneFs_->setToolTip("Başka disklere/bağlama noktalarına geçme\n(aynı aygıttaki btrfs alt birimleri dahil edilir)");
+    actOneFs_->setToolTip(QT("Do not cross into other disks or mount points\n(btrfs subvolumes on the same device are included)"));
     connect(actOneFs_, &QAction::toggled, this, [this](bool on) {
         session_.oneFs = on;
         saveSettings();
     });
-    actGroup_ = act("Dosyaları grupla", "view-group", QKeySequence("Ctrl+G"));
+    actGroup_ = act(QT("Group files"), "view-group", QKeySequence("Ctrl+G"));
     actGroup_->setCheckable(true);
-    actGroup_->setToolTip("Bir klasördeki çok sayıda benzer öğeyi (oyun asset'leri gibi) tek kutuda topla:\n"
-                          "aynı uzantılı dosyalar, küçük dosyalar ve küçük alt klasörler");
+    actGroup_->setToolTip(QT("Collect many similar items in a folder (like game assets) into one box:\n"
+                             "files with the same extension, small files and small subfolders"));
     connect(actGroup_, &QAction::toggled, this, &MainWindow::setGrouping);
-    actTreemap_ = act("Treemap", "view-split-top-bottom", QKeySequence("F9"));
-    QAction *actTreemap = actTreemap_;
-    actTreemap->setCheckable(true);
-    actTreemap->setChecked(true);
-    connect(actTreemap, &QAction::toggled, this, [this](bool on) {
+    actTreemap_ = act(QT("Treemap"), "view-split-top-bottom", QKeySequence("F9"));
+    actTreemap_->setCheckable(true);
+    actTreemap_->setChecked(true);
+    connect(actTreemap_, &QAction::toggled, this, [this](bool on) {
         tmBox_->setVisible(on);
         saveSettings();
     });
+    actAge_ = act(QT("Color by age"), "chronometer", QKeySequence("F8"));
+    actAge_->setCheckable(true);
+    actAge_->setToolTip(QT("Color the treemap by when files last changed instead of by type"));
+    connect(actAge_, &QAction::toggled, this, &MainWindow::setColorByAge);
 
-    QAction *actCopy = act("Yolu kopyala", "edit-copy", QKeySequence("Ctrl+C"));
+    QAction *actCopy = act(QT("Copy path"), "edit-copy", QKeySequence("Ctrl+C"));
     connect(actCopy, &QAction::triggered, this, [this] {
         if (Node *n = selectedNode())
             copyPath(n);
     });
-    QAction *actTrash = act("Çöp kutusuna taşı", "user-trash", QKeySequence("Delete"));
+    QAction *actTrash = act(QT("Move to trash"), "user-trash", QKeySequence("Delete"));
     connect(actTrash, &QAction::triggered, this, [this] {
         if (Node *n = selectedNode())
             deleteNode(n, false);
     });
-    QAction *actDelete = act("Kalıcı olarak sil…", "edit-delete", QKeySequence("Shift+Delete"));
+    QAction *actDelete = act(QT("Delete permanently…"), "edit-delete", QKeySequence("Shift+Delete"));
     connect(actDelete, &QAction::triggered, this, [this] {
         if (Node *n = selectedNode())
             deleteNode(n, true);
     });
-    QAction *actQuit = act("Çıkış", "application-exit", QKeySequence("Ctrl+Q"));
+    QAction *actQuit = act(QT("Quit"), "application-exit", QKeySequence("Ctrl+Q"));
     connect(actQuit, &QAction::triggered, this, &QWidget::close);
 
-    QToolBar *tb = addToolBar("Araçlar");
+    // Araçlar
+    QAction *actFind = act(QT("Find files…"), "edit-find", QKeySequence("Ctrl+F"));
+    connect(actFind, &QAction::triggered, this, &MainWindow::findFiles);
+    QAction *actDup = act(QT("Duplicate files…"), "edit-copy");
+    connect(actDup, &QAction::triggered, this, [this] {
+        Node *root = rootNode();
+        runTool(T("Duplicate files"), [root](Job &j) { j.result = findDuplicates(root, j); });
+    });
+    QAction *actClean = act(QT("Cleanup suggestions…"), "edit-clear-all");
+    connect(actClean, &QAction::triggered, this, [this] {
+        Node *root = rootNode();
+        const bool ap = session_.apparent;
+        runTool(T("Cleanup suggestions"), [root, ap](Job &j) { j.result = findCleanup(root, ap, j); });
+    });
+    QAction *actOwners = act(QT("Usage by owner"), "user-identity");
+    connect(actOwners, &QAction::triggered, this, [this] {
+        if (toolReady())
+            showTable(ownerUsage(rootNode(), session_.apparent));
+    });
+    QAction *actUnowned = act(QT("Files no package owns…"), "package-x-generic");
+    actUnowned->setToolTip(QT("Arch Linux: files under /usr, /etc and /opt that no pacman package owns"));
+    actUnowned->setEnabled(havePacman());
+    connect(actUnowned, &QAction::triggered, this, [this] {
+        Node *root = rootNode();
+        const bool ap = session_.apparent;
+        runTool(T("Files no package owns"), [root, ap](Job &j) { j.result = findUnowned(root, ap, j); });
+    });
+    QAction *actCompare = act(QT("Compare with snapshot…"), "document-compare");
+    connect(actCompare, &QAction::triggered, this, &MainWindow::compareDialog);
+
+    QToolBar *tb = addToolBar(QT("Tools"));
     tb->setObjectName("main_toolbar");
     tb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     tb->setIconSize(QSize(18, 18));
     tb->setMovable(false);
-    for (QAction *a : {actZoomIn, actZoomOut_, actZoomReset})
+    for (QAction *a : {actZoomIn, actZoomOut_, actZoomReset, actFind})
         a->setIconText(QString());  // araç çubuğunda yalnızca simge; ipucu kalır
+    actFind->setToolTip(QT("Find files…"));
     auto fill = [](QWidget *w, std::initializer_list<QAction *> acts) {
         for (QAction *a : acts) {
             if (!a) {
@@ -394,46 +454,61 @@ void MainWindow::buildActions()
         }
     };
     fill(tb, {actOpen, actRescan, actStop_, nullptr, actZoomIn, actZoomOut_, actZoomReset, nullptr,
-              actApparent_, actOneFs_, actGroup_, actTreemap});
-    fill(menuBar()->addMenu("&Dosya"), {actOpen, actRescan, actStop_, nullptr, actQuit});
-    fill(menuBar()->addMenu("Dü&zen"), {actCopy, nullptr, actTrash, actDelete});
-    QMenu *view = menuBar()->addMenu("&Görünüm");
+              actApparent_, actOneFs_, actGroup_, actTreemap_, actAge_, nullptr, actFind});
+    fill(menuBar()->addMenu(QT("&File")), {actOpen, actRescan, actStop_, nullptr, actOpenSnap, actSaveSnap, actCsv,
+                                           nullptr, actQuit});
+    fill(menuBar()->addMenu(QT("&Edit")), {actCopy, nullptr, actTrash, actDelete});
+    QMenu *view = menuBar()->addMenu(QT("&View"));
     fill(view, {actZoomIn, actZoomOut_, actZoomReset, nullptr, actApparent_, actOneFs_, actGroup_});
-    QMenu *thr = view->addMenu("Gruplama eşiği");
+    QMenu *thr = view->addMenu(QT("Grouping threshold"));
     auto *thrGroup = new QActionGroup(this);
     for (uint32_t n : GROUP_MIN_CHOICES) {
-        QAction *a = thr->addAction(QString("En az %1 öğe").arg(n));
+        QAction *a = thr->addAction(QTF("At least %1 items", {std::to_string(n)}));
         a->setCheckable(true);
         a->setChecked(n == settings_.groupMin);
         thrGroup->addAction(a);
         connect(a, &QAction::triggered, this, [this, n] { setGroupMin(n); });
     }
-    fill(view, {nullptr, actTreemap});
-    QMenu *themeMenu = view->addMenu("Tema");
+    fill(view, {nullptr, actTreemap_, actAge_});
+    QMenu *themeMenu = view->addMenu(QT("Theme"));
     auto *themeGroup = new QActionGroup(this);
-    for (auto [id, label] : {std::pair{"system", "Sistem"}, {"light", "Açık"}, {"dark", "Koyu"}}) {
-        QAction *a = themeMenu->addAction(label);
+    for (auto [id, label] : {std::pair{"system", N_("System")}, {"light", N_("Light")}, {"dark", N_("Dark")}}) {
+        QAction *a = themeMenu->addAction(QT(label));
         a->setCheckable(true);
         a->setChecked(settings_.theme == id);
         themeGroup->addAction(a);
         connect(a, &QAction::triggered, this, [this, t = std::string(id)] { setTheme(t); });
     }
+    QMenu *langMenu = view->addMenu(QT("Language"));
+    auto *langGroup = new QActionGroup(this);
+    for (auto [id, label] : {std::pair{"system", QT("System")}, {"en", QString("English")}, {"tr", QString("Türkçe")}}) {
+        QAction *a = langMenu->addAction(label);
+        a->setCheckable(true);
+        a->setChecked(settings_.language == id);
+        langGroup->addAction(a);
+        connect(a, &QAction::triggered, this, [this, l = std::string(id)] { setLanguage(l); });
+    }
+    fill(menuBar()->addMenu(QT("&Tools")), {actFind, actDup, actClean, nullptr, actOwners, actUnowned, nullptr, actCompare});
+
     // Kayıtlı ayarları uygula (kök yokken yalnızca durumları kurar).
     applyingSettings_ = true;
     session_.groupMin = settings_.groupMin;
     actApparent_->setChecked(settings_.apparent);
     actOneFs_->setChecked(settings_.oneFs);
     actGroup_->setChecked(settings_.grouping);
-    actTreemap->setChecked(settings_.showTreemap);
+    actTreemap_->setChecked(settings_.showTreemap);
+    actAge_->setChecked(settings_.colorByAge);
     applyingSettings_ = false;
 
-    QMenu *help = menuBar()->addMenu("&Yardım");
-    help->addAction("Hakkında", this, [this] {
-        QMessageBox::about(this, "TuxDirStat hakkında",
-                           "<b>TuxDirStat</b><br>Linux için disk kullanım analizörü.<br><br>"
-                           "Ağaçta veya treemap'te bir öğeye tıklayın; treemap'te çift tıklayarak "
-                           "klasöre yakınlaşın, Backspace ile geri çıkın. Uzantı listesinde bir satır "
-                           "seçmek o türdeki dosyaları treemap'te işaretler.");
+    QMenu *help = menuBar()->addMenu(QT("&Help"));
+    help->addAction(QT("About"), this, [this] {
+        QMessageBox::about(this, QT("About TuxDirStat"),
+                           "<b>TuxDirStat " TUXDIRSTAT_VERSION "</b><br>" + QT("Disk usage analyzer for Linux.") + "<br><br>" +
+                               QT("Click an item in the tree or the treemap. Double-click in the treemap to zoom into a "
+                                  "folder, Backspace goes back. Selecting a row in the extension list marks those files "
+                                  "in the treemap.") +
+                               "<br><br>" + QT("License: GPL-3.0-or-later") +
+                               "<br><a href=\"https://github.com/Gubir34/TuxDirStat\">github.com/Gubir34/TuxDirStat</a>");
     });
 }
 
@@ -442,19 +517,41 @@ void MainWindow::buildActions()
 void MainWindow::chooseTarget()
 {
     TargetDialog dlg(this);
-    if (dlg.exec() == QDialog::Accepted && !dlg.path.isEmpty())
+    if (dlg.exec() != QDialog::Accepted || dlg.path.isEmpty())
+        return;
+    if (dlg.admin)
+        startPrivilegedScan(dlg.path);
+    else
         startScan(dlg.path);
+}
+
+void MainWindow::beginBusy(const QString &title)
+{
+    progress_->show();
+    actStop_->setEnabled(true);
+    poll_.start();
+    if (!title.isEmpty())
+        setWindowTitle("TuxDirStat — " + title);
 }
 
 void MainWindow::startScan(const QString &path, Node *target)
 {
     const QString abs = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
     session_.startScan(abs.toStdString(), target);
-    progress_->show();
-    actStop_->setEnabled(true);
-    poll_.start();
-    if (!target)
-        setWindowTitle("TuxDirStat — " + abs);
+    beginBusy(target ? QString() : abs);
+}
+
+void MainWindow::startPrivilegedScan(const QString &path)
+{
+    const QString abs = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    session_.startPrivilegedScan(abs.toStdString());
+    beginBusy(abs);
+}
+
+void MainWindow::openSnapshot(const QString &file)
+{
+    session_.openSnapshot(QFileInfo(file).absoluteFilePath().toStdString());
+    beginBusy(QFileInfo(file).fileName());
 }
 
 void MainWindow::rescan()
@@ -469,9 +566,7 @@ void MainWindow::poll()
 {
     const Session::Result res = session_.poll();
     if (res == Session::Result::Running) {
-        const QString cur = statusLeft_->fontMetrics().elidedText(qs(session_.progressPath()), Qt::ElideMiddle, 600);
-        statusLeft_->setText(QString("Taranıyor… %1 öğe · %2 · %3")
-                                 .arg(qs(fmtInt(session_.progressCount())), qs(fmtSize(session_.progressBytes())), cur));
+        statusLeft_->setText(statusLeft_->fontMetrics().elidedText(qs(session_.progressText()), Qt::ElideMiddle, 900));
         return;
     }
     poll_.stop();
@@ -479,11 +574,13 @@ void MainWindow::poll()
     actStop_->setEnabled(false);
     switch (res) {
     case Session::Result::Failed:
-        QMessageBox::warning(this, "TuxDirStat", "Tarama başarısız:\n" + qs(session_.error()));
+        QMessageBox::warning(this, "TuxDirStat", QT("The scan failed:") + "\n" + qs(session_.error()));
         statusLeft_->clear();
+        if (rootNode())
+            setWindowTitle("TuxDirStat — " + qs(rootNode()->path()));
         return;
     case Session::Result::Cancelled:
-        statusLeft_->setText("Tarama durduruldu.");
+        statusLeft_->setText(QT("Scan stopped."));
         return;
     case Session::Result::NewTree: {
         Node *root = session_.pendingRoot();
@@ -493,6 +590,7 @@ void MainWindow::poll()
         session_.commitNewTree();
         treeView_->expand(model_->index(0, 0));
         treeView_->setCurrentIndex(model_->index(0, 0));
+        setWindowTitle("TuxDirStat — " + qs(root->path()));
         break;
     }
     case Session::Result::Refresh: {
@@ -514,8 +612,7 @@ void MainWindow::poll()
     fillExtTable();
     updateTotals();
     updateZoomLabel();
-    statusLeft_->setText(QString("Tarama tamamlandı: %1 öğe, %2 sn.")
-                             .arg(qs(fmtInt(session_.lastCount())), QString::number(session_.elapsed(), 'f', 2).replace('.', ',')));
+    statusLeft_->setText(QTF("Done: %1 items in %2 s.", {fmtInt(session_.lastCount()), fmtDecimal(session_.elapsed(), 2)}));
 }
 
 void MainWindow::refreshStats()
@@ -566,8 +663,8 @@ void MainWindow::updateTotals()
 {
     Node *root = rootNode();
     if (!root) {
-        title_->setText("Henüz tarama yapılmadı");
-        subtitle_->setText("Bir konum seçmek için Aç… (Ctrl+O)");
+        title_->setText(QT("Nothing scanned yet"));
+        subtitle_->setText(QT("Open… (Ctrl+O) to choose a location"));
         diskLabel_->clear();
         diskBar_->hide();
         return;
@@ -575,17 +672,18 @@ void MainWindow::updateTotals()
     const std::string path = root->path();
     title_->setText(title_->fontMetrics().elidedText(qs(path), Qt::ElideMiddle, 700));
     title_->setToolTip(qs(path));
-    subtitle_->setText(QString("%1 · %2 dosya · %3 klasör%4")
-                           .arg(qs(fmtSize(root->sizeOf(session_.apparent))), qs(fmtInt(root->files)),
-                                qs(fmtInt(root->dirs)),
-                                session_.apparent ? QString(" · görünür boyut") : QString(" · diskte kapladığı alan")));
+    subtitle_->setText(QTF("%1 · %2 files · %3 folders · %4",
+                           {fmtSize(root->sizeOf(session_.apparent)), fmtInt(root->files), fmtInt(root->dirs),
+                            session_.apparent ? T("apparent size") : T("size on disk")}));
     uint64_t total = 0, avail = 0;
     if (diskUsage(path, total, avail)) {
         const double used = double(total - avail) / double(total);
-        diskLabel_->setText(QString("Disk: %1 boş / %2 (%3 dolu)")
-                                .arg(qs(fmtSize(avail)), qs(fmtSize(total)), qs(fmtPct(used))));
+        diskLabel_->setText(QTF("Disk: %1 free of %2 (%3 used)", {fmtSize(avail), fmtSize(total), fmtPct(used)}));
         diskBar_->setValue(int(used * 1000));
         diskBar_->show();
+    } else {
+        diskLabel_->clear();
+        diskBar_->hide();
     }
 }
 
@@ -693,7 +791,8 @@ void MainWindow::zoomOut()
         zoomTo(r->parent);
 }
 
-// Treemap'in üstündeki tıklanabilir konum çubuğu: kökten yakınlaşılan klasöre kadar.
+// Treemap'in üstündeki tıklanabilir konum çubuğu: kökten yakınlaşılan klasöre kadar;
+// yaşa göre renklendirmede sağda renk açıklaması.
 void MainWindow::updateZoomLabel()
 {
     Node *r = treemap_->root();
@@ -703,7 +802,7 @@ void MainWindow::updateZoomLabel()
         delete it->widget();
         delete it;
     }
-    auto *lbl = new QLabel("Treemap");
+    auto *lbl = new QLabel(QT("Treemap"));
     lbl->setForegroundRole(QPalette::PlaceholderText);
     lbl->setContentsMargins(2, 0, 8, 0);
     lay->addWidget(lbl);
@@ -715,10 +814,8 @@ void MainWindow::updateZoomLabel()
         Node *n = chain[i];
         const bool last = i == 0;
         if (chain.size() > maxShown && i < chain.size() - 1 && i >= maxShown - 1) {
-            if (i == chain.size() - 2) {
-                auto *dots = new QLabel("…");
-                lay->addWidget(dots);
-            }
+            if (i == chain.size() - 2)
+                lay->addWidget(new QLabel("…"));
             continue;
         }
         auto *b = new QToolButton;
@@ -740,6 +837,15 @@ void MainWindow::updateZoomLabel()
         }
     }
     lay->addStretch(1);
+    if (actAge_ && actAge_->isChecked()) {
+        QString html = QT("Last change:") + " ";
+        for (const AgeBucket &b : ageBuckets())
+            html += QString("<span style=\"color:%1\">■</span>&nbsp;%2&nbsp;&nbsp;")
+                        .arg(displayColor(b.color).name(), QT(b.label).toHtmlEscaped());
+        auto *legend = new QLabel(html);
+        legend->setForegroundRole(QPalette::PlaceholderText);
+        lay->addWidget(legend);
+    }
 }
 
 void MainWindow::setTheme(const std::string &theme)
@@ -750,6 +856,13 @@ void MainWindow::setTheme(const std::string &theme)
     treeView_->viewport()->update();
     extTable_->viewport()->update();
     fillExtTable();
+}
+
+void MainWindow::setLanguage(const std::string &lang)
+{
+    settings_.language = lang;
+    saveSettings();
+    QMessageBox::information(this, "TuxDirStat", QT("The new language is used after TuxDirStat is restarted."));
 }
 
 void MainWindow::setApparent(bool a)
@@ -765,6 +878,17 @@ void MainWindow::setApparent(bool a)
     saveSettings();
 }
 
+void MainWindow::setColorByAge(bool on)
+{
+    if (actAge_->isChecked() != on) {
+        actAge_->setChecked(on);
+        return;
+    }
+    treemap_->setColorMode(on ? ColorMode::Age : ColorMode::Extension);
+    updateZoomLabel();
+    saveSettings();
+}
+
 void MainWindow::saveSettings()
 {
     if (applyingSettings_)
@@ -773,7 +897,8 @@ void MainWindow::saveSettings()
     settings_.oneFs = session_.oneFs;
     settings_.grouping = session_.grouping;
     settings_.groupMin = session_.groupMin;
-    settings_.showTreemap = !actTreemap_ || actTreemap_->isChecked();  // tema settings_ içinde güncel
+    settings_.showTreemap = !actTreemap_ || actTreemap_->isChecked();  // tema ve dil settings_ içinde güncel
+    settings_.colorByAge = actAge_ && actAge_->isChecked();
     settings_.save();
 }
 
@@ -814,25 +939,31 @@ void MainWindow::regroup(bool on, uint32_t minCount)
 void MainWindow::showMenu(Node *n, const QPoint &gpos)
 {
     QMenu m(this);
-    m.addAction(QIcon::fromTheme("document-open"), "Aç", this,
+    m.addAction(QIcon::fromTheme("document-open"), QT("Open"), this,
                 [n] { QDesktopServices::openUrl(QUrl::fromLocalFile(qs(n->path()))); });
-    m.addAction(QIcon::fromTheme("system-file-manager"), "Dosya yöneticisinde göster", this,
+    m.addAction(QIcon::fromTheme("system-file-manager"), QT("Show in file manager"), this,
                 [n] { revealPath(n->path()); });
-    m.addAction(QIcon::fromTheme("edit-copy"), "Yolu kopyala", this, [this, n] { copyPath(n); });
+    m.addAction(QIcon::fromTheme("edit-copy"), QT("Copy path"), this, [this, n] { copyPath(n); });
+    if (havePacman() && !(n->flags & F_GROUP))
+        m.addAction(QIcon::fromTheme("package-x-generic"), QT("Which package owns this?"), this, [this, n] {
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            const std::string msg = packageOwnerMessage(n->path());
+            QApplication::restoreOverrideCursor();
+            QMessageBox::information(this, "TuxDirStat", qs(msg));
+        });
     if (n->isDir) {
         m.addSeparator();
-        m.addAction(QIcon::fromTheme("zoom-in"), "Treemap'te yakınlaştır", this, [this, n] { zoomTo(n); });
+        m.addAction(QIcon::fromTheme("zoom-in"), QT("Zoom into in treemap"), this, [this, n] { zoomTo(n); });
         m.addAction(QIcon::fromTheme("view-refresh"),
-                    (n->flags & F_GROUP)   ? "Bulunduğu klasörü yeniden tara"
-                    : (n->flags & F_MOUNT) ? "Bu dosya sistemini de tara"
-                                           : "Bu klasörü yeniden tara",
-                    this,
-                    [this, n] { refreshNode(n); });
+                    (n->flags & F_GROUP)   ? QT("Rescan its folder")
+                    : (n->flags & F_MOUNT) ? QT("Scan this file system too")
+                                           : QT("Rescan this folder"),
+                    this, [this, n] { refreshNode(n); });
     }
     if (n->parent) {
         m.addSeparator();
-        m.addAction(QIcon::fromTheme("user-trash"), "Çöp kutusuna taşı", this, [this, n] { deleteNode(n, false); });
-        m.addAction(QIcon::fromTheme("edit-delete"), "Kalıcı olarak sil…", this, [this, n] { deleteNode(n, true); });
+        m.addAction(QIcon::fromTheme("user-trash"), QT("Move to trash"), this, [this, n] { deleteNode(n, false); });
+        m.addAction(QIcon::fromTheme("edit-delete"), QT("Delete permanently…"), this, [this, n] { deleteNode(n, true); });
     }
     m.exec(gpos);
 }
@@ -852,36 +983,18 @@ void MainWindow::refreshNode(Node *n)
     startScan(qs(n->path()), n);
 }
 
-void MainWindow::deleteNode(Node *n, bool permanent, bool confirm)
+bool MainWindow::removeFromDisk(Node *n, bool permanent, std::string *err, std::string *firstFailed)
 {
-    if (!n->parent || session_.scanning())
-        return;
-    const QString path = qs(n->path());
-    const QString kind = (n->flags & F_GROUP) ? QString("gruptaki %1 dosyayı").arg(qs(fmtInt(n->files)))
-                         : n->isDir           ? QString("klasörü")
-                                              : QString("dosyayı");
-    const QString size = qs(fmtSize(n->sizeOf(session_.apparent)));
-    if (confirm) {
-        const QString q = permanent
-            ? QString("Bu %1 <b>kalıcı olarak</b> silmek istediğinize emin misiniz?<br><br><code>%2</code><br>(%3)"
-                      "<br><br>Bu işlem geri alınamaz.").arg(kind, path.toHtmlEscaped(), size)
-            : QString("Bu %1 çöp kutusuna taşınsın mı?<br><br><code>%2</code><br>(%3)").arg(kind, path.toHtmlEscaped(), size);
-        if (QMessageBox::question(this, "TuxDirStat", q, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
-            return;
-    }
-    std::string err;
     int failed = 0;
-    std::string firstFailed;
     for (const std::string &p : diskPaths(n)) {
-        if (!(permanent ? removePath(p, &err) : moveToTrash(qs(p))) && !failed++)
-            firstFailed = p;
+        if (!(permanent ? removePath(p, err) : moveToTrash(qs(p))) && !failed++)
+            *firstFailed = p;
     }
-    if (failed) {
-        QMessageBox::warning(this, "TuxDirStat", "Silinemedi (ya da yalnızca kısmen silindi):\n" + qs(firstFailed) +
-                                                  (err.empty() ? QString() : "\n\n" + qs(err)));
-        refreshNode(n->parent);  // ağacı diskle eşitle
-        return;
-    }
+    return failed == 0;
+}
+
+void MainWindow::dropNode(Node *n)
+{
     n = session_.removalTarget(n);  // grubun son öğesiyse grup da kalkar
     Node *p = n->parent;
     treemap_->invalidate();
@@ -894,6 +1007,185 @@ void MainWindow::deleteNode(Node *n, bool permanent, bool confirm)
     fillExtTable();
     updateTotals();
     updateZoomLabel();
+}
+
+void MainWindow::deleteNode(Node *n, bool permanent, bool confirm)
+{
+    if (!n->parent || session_.scanning())
+        return;
+    const QString path = qs(n->path());
+    const QString kind = (n->flags & F_GROUP) ? QTF("the %1 files in this group", {fmtInt(n->files)})
+                         : n->isDir           ? QT("this folder")
+                                              : QT("this file");
+    const QString size = qs(fmtSize(n->sizeOf(session_.apparent)));
+    if (confirm) {
+        const QString q = permanent
+            ? QTF("Delete %1 <b>permanently</b>?", {kind.toStdString()}) + "<br><br><code>" + path.toHtmlEscaped() +
+                  "</code><br>(" + size + ")<br><br>" + QT("This cannot be undone.")
+            : QTF("Move %1 to the trash?", {kind.toStdString()}) + "<br><br><code>" + path.toHtmlEscaped() + "</code><br>(" +
+                  size + ")";
+        if (QMessageBox::question(this, "TuxDirStat", q, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+    }
+    std::string err, firstFailed;
+    if (!removeFromDisk(n, permanent, &err, &firstFailed)) {
+        QMessageBox::warning(this, "TuxDirStat", QT("Could not delete (or only partly deleted):") + "\n" + qs(firstFailed) +
+                                                      (err.empty() ? QString() : "\n\n" + qs(err)));
+        refreshNode(n->parent);  // ağacı diskle eşitle
+        return;
+    }
+    dropNode(n);
+}
+
+bool MainWindow::removeQuietly(Node *n, QString *err)
+{
+    if (!n->parent || session_.scanning())
+        return false;
+    std::string e, firstFailed;
+    if (!removeFromDisk(n, false, &e, &firstFailed)) {
+        if (err)
+            *err = qs(firstFailed);
+        refreshNode(n->parent);
+        return false;
+    }
+    dropNode(n);
+    return true;
+}
+
+// ───────────── araçlar ─────────────
+
+bool MainWindow::toolReady()
+{
+    if (session_.scanning()) {
+        QMessageBox::information(this, "TuxDirStat", QT("Wait until the scan has finished."));
+        return false;
+    }
+    if (!rootNode()) {
+        QMessageBox::information(this, "TuxDirStat", QT("Scan a folder first."));
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::showTable(ResultTable t)
+{
+    ResultDialog dlg(this, std::move(t));
+    dlg.exec();
+}
+
+void MainWindow::runTool(const char *title, std::function<void(Job &)> fn)
+{
+    if (!toolReady())
+        return;
+    auto job = std::make_shared<Job>(title, std::move(fn));
+    runJobWithProgress(this, job, [this](Job &j) {
+        if (!j.error.empty() && j.result.rows.empty())
+            QMessageBox::warning(this, "TuxDirStat", qs(j.error));
+        else
+            showTable(std::move(j.result));
+    });
+}
+
+void MainWindow::findFiles()
+{
+    if (!toolReady())
+        return;
+    QDialog dlg(this);
+    dlg.setWindowTitle("TuxDirStat — " + QT("Find files"));
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *edit = new QLineEdit(lastQuery_);
+    edit->setPlaceholderText("*.iso >1G older:1y");
+    edit->setMinimumWidth(520);
+    lay->addWidget(edit);
+    auto *help = new QLabel(QT(searchHelp()));
+    help->setForegroundRole(QPalette::PlaceholderText);
+    QFont mono("monospace");
+    mono.setStyleHint(QFont::Monospace);
+    help->setFont(mono);
+    lay->addWidget(help);
+    auto *btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    btns->button(QDialogButtonBox::Ok)->setText(QT("Find"));
+    btns->button(QDialogButtonBox::Cancel)->setText(QT("Cancel"));
+    connect(btns, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(btns, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    lay->addWidget(btns);
+    for (;;) {
+        if (dlg.exec() != QDialog::Accepted)
+            return;
+        lastQuery_ = edit->text();
+        std::string err;
+        ResultTable t = searchTree(rootNode(), lastQuery_.toStdString(), session_.apparent, &err);
+        if (!err.empty()) {
+            QMessageBox::warning(this, "TuxDirStat", qs(err));
+            continue;
+        }
+        t.title += ": " + lastQuery_.toStdString();
+        showTable(std::move(t));
+        return;
+    }
+}
+
+void MainWindow::openSnapshotDialog()
+{
+    if (session_.scanning())
+        return;
+    const QString f = QFileDialog::getOpenFileName(this, QT("Open snapshot"), QDir::homePath(), QT(SNAPSHOT_FILTER));
+    if (!f.isEmpty())
+        openSnapshot(f);
+}
+
+void MainWindow::saveSnapshotDialog()
+{
+    if (!toolReady())
+        return;
+    QString name = QFileInfo(qs(rootNode()->path())).fileName();
+    if (name.isEmpty())
+        name = "root";
+    const QString suggestion = QDir::homePath() + "/" + name + "-" + QDate::currentDate().toString(Qt::ISODate) + ".json";
+    QString f = QFileDialog::getSaveFileName(this, QT("Save snapshot"), suggestion, QT(SNAPSHOT_FILTER));
+    if (f.isEmpty())
+        return;
+    if (QFileInfo(f).suffix().isEmpty())
+        f += ".json";
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    std::string err;
+    const bool ok = saveSnapshot(rootNode(), f.toStdString(), &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, "TuxDirStat", QT("Could not save the snapshot:") + "\n" + qs(err));
+    else
+        statusLeft_->setText(QTF("Snapshot saved: %1", {f.toStdString()}));
+}
+
+void MainWindow::exportCsvDialog()
+{
+    if (!toolReady())
+        return;
+    QString f = QFileDialog::getSaveFileName(this, QT("Export as CSV"), QDir::homePath() + "/tuxdirstat.csv",
+                                             QT("CSV files (*.csv);;All files (*)"));
+    if (f.isEmpty())
+        return;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    std::string err;
+    const bool ok = exportCsv(rootNode(), f.toStdString(), &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, "TuxDirStat", QT("Could not write the file:") + "\n" + qs(err));
+    else
+        statusLeft_->setText(QTF("Exported: %1", {f.toStdString()}));
+}
+
+void MainWindow::compareDialog()
+{
+    if (!toolReady())
+        return;
+    const QString f = QFileDialog::getOpenFileName(this, QT("Compare with snapshot"), QDir::homePath(), QT(SNAPSHOT_FILTER));
+    if (f.isEmpty())
+        return;
+    Node *root = rootNode();
+    const bool ap = session_.apparent;
+    const std::string file = f.toStdString();
+    runTool(T("Compare with snapshot"), [root, ap, file](Job &j) { j.result = compareWithSnapshot(root, file, ap, j); });
 }
 
 void MainWindow::closeEvent(QCloseEvent *e)

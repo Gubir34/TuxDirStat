@@ -1,6 +1,9 @@
 #include "core.h"
 
+#include "i18n.h"
+
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cerrno>
 #include <cstdio>
@@ -10,6 +13,7 @@
 #include <sstream>
 
 #include <strings.h>
+#include <pwd.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -186,7 +190,7 @@ void groupFiles(Node *root, Arena &arena, uint32_t minCount)
         loose.clear();
         for (auto &[e, files] : byExt) {
             if (files.size() >= minCount)
-                groups.push_back(makeGroup(arena, d, e, e ? "*." + ExtTable::name(e) : std::string("uzantısız"), files));
+                groups.push_back(makeGroup(arena, d, e, e ? "*." + ExtTable::name(e) : std::string(T("no extension")), files));
             else
                 loose.insert(loose.end(), files.begin(), files.end());
         }
@@ -196,11 +200,11 @@ void groupFiles(Node *root, Arena &arena, uint32_t minCount)
             if (isSmall(f, d))
                 smallFiles.push_back(f);
         if (smallFiles.size() >= minCount) {
-            groups.push_back(makeGroup(arena, d, GROUP_SMALL, "küçük dosyalar", smallFiles));
+            groups.push_back(makeGroup(arena, d, GROUP_SMALL, T("small files"), smallFiles));
             std::erase_if(loose, [](const Node *f) { return f->parent->flags & F_GROUP; });
         }
         if (smallDirs.size() >= minCount)
-            groups.push_back(makeGroup(arena, d, GROUP_DIRS, "küçük klasörler", smallDirs));
+            groups.push_back(makeGroup(arena, d, GROUP_DIRS, T("small folders"), smallDirs));
         else
             kids.insert(kids.end(), smallDirs.begin(), smallDirs.end());
         if (groups.empty())
@@ -268,11 +272,11 @@ std::string displayName(const Node *n, bool isRoot)
 {
     std::string s = isRoot ? n->path() : std::string(n->nameView());
     if (n->flags & F_GROUP)
-        s += n->ext == GROUP_DIRS ? "  (" + fmtInt(n->children.size()) + " klasör)" : "  (" + fmtInt(n->files) + " dosya)";
+        s += "  (" + (n->ext == GROUP_DIRS ? TF("%1 folders", {fmtInt(n->children.size())}) : TF("%1 files", {fmtInt(n->files)})) + ")";
     else if (n->flags & F_ERROR)
-        s += "  [erişim yok]";
+        s += std::string("  [") + T("no access") + "]";
     else if (n->flags & F_MOUNT)
-        s += "  [ayrı dosya sistemi]";
+        s += std::string("  [") + T("other file system") + "]";
     return s;
 }
 
@@ -381,20 +385,30 @@ std::vector<ExtStat> computeExtStats(const Node *root)
     return stats;
 }
 
+// Dosya adının küçük harfli uzantısı; uzantı sayılmayacaksa boş.
+static std::string extKey(std::string_view name)
+{
+    const size_t dot = name.rfind('.');
+    if (dot == std::string_view::npos || dot == 0 || dot + 1 == name.size() || name.size() - dot - 1 > 12)
+        return {};
+    std::string key(name.substr(dot + 1));
+    for (char &c : key)
+        if (c >= 'A' && c <= 'Z')
+            c = char(c + 32);
+    return key;
+}
+
+uint32_t ExtTable::forName(std::string_view fileName)
+{
+    const std::string key = extKey(fileName);
+    return key.empty() ? 0 : intern(key);
+}
+
 static uint32_t extId(const char *name, std::unordered_map<std::string, uint32_t> &cache)
 {
-    const char *dot = std::strrchr(name, '.');
-    if (!dot || dot == name || dot[1] == 0)
+    std::string key = extKey(name);
+    if (key.empty())
         return 0;
-    size_t len = std::strlen(dot + 1);
-    if (len > 12)
-        return 0;
-    char buf[16];
-    for (size_t i = 0; i < len; ++i) {
-        char c = dot[1 + i];
-        buf[i] = (c >= 'A' && c <= 'Z') ? char(c + 32) : c;
-    }
-    std::string key(buf, len);
     auto it = cache.find(key);
     if (it != cache.end())
         return it->second;
@@ -519,12 +533,13 @@ void Scanner::run()
     if (::stat(path_.c_str(), &st) != 0) {
         error = std::strerror(errno);
     } else if (!S_ISDIR(st.st_mode)) {
-        error = "Klasör değil: " + path_;
+        error = TF("Not a folder: %1", {path_});
     } else {
         tree_ = std::make_unique<Tree>();
         tree_->arenas.push_back(std::make_unique<Arena>());
         Node *root = tree_->arenas[0]->node(nullptr, path_, true);
         root->mtime = st.st_mtim.tv_sec;
+        root->uid = st.st_uid;
         tree_->root = root;
         stack_.push_back({root, path_, st.st_dev});
         pending_ = 1;
@@ -613,6 +628,7 @@ void Scanner::scanDir(Item &it, Ctx &ctx)
         if (S_ISDIR(st.st_mode)) {
             Node *c = ctx.arena->node(node, nm, true);
             c->mtime = st.st_mtim.tv_sec;
+            c->uid = st.st_uid;
             kids.push_back(c);
             std::string cp = base + "/" + nm;
             if (st.st_dev != it.dev) {
@@ -635,6 +651,7 @@ void Scanner::scanDir(Item &it, Ctx &ctx)
             }
             c->alloc = alloc;
             c->mtime = st.st_mtim.tv_sec;
+            c->uid = st.st_uid;
             c->ext = extId(nm, ctx.extCache);
             if (S_ISLNK(st.st_mode))
                 c->flags |= F_LINK;
@@ -666,14 +683,16 @@ void Scanner::scanDir(Item &it, Ctx &ctx)
 
 // ───────────────────────────── Biçimlendirme ─────────────────────────────
 
-static std::string fixed1(double v)
+// printf C yereline (LC_NUMERIC) bağlıdır; arayüzler setlocale() çağırdığı için to_chars kullanılır.
+std::string fmtDecimal(double v, int digits)
 {
-    char buf[32];
-    std::snprintf(buf, sizeof buf, "%.1f", v);
-    for (char *p = buf; *p; ++p)
-        if (*p == '.')
-            *p = ',';
-    return buf;
+    char buf[64];
+    auto r = std::to_chars(buf, buf + sizeof buf, v, std::chars_format::fixed, digits);
+    std::string s(buf, r.ptr);
+    for (char &c : s)
+        if (c == '.')
+            c = i18n::decimalPoint();
+    return s;
 }
 
 std::string fmtSize(uint64_t b)
@@ -685,7 +704,7 @@ std::string fmtSize(uint64_t b)
     for (int i = 0; i < 5; ++i) {
         v /= 1024;
         if (v < 1024 || i == 4)
-            return fixed1(v) + ' ' + units[i];
+            return fmtDecimal(v, 1) + ' ' + units[i];
     }
     return {};
 }
@@ -694,7 +713,7 @@ std::string fmtInt(uint64_t n)
 {
     std::string s = std::to_string(n);
     for (int i = int(s.size()) - 3; i > 0; i -= 3)
-        s.insert(size_t(i), 1, '.');
+        s.insert(size_t(i), 1, i18n::thousandsSep());
     return s;
 }
 
@@ -706,13 +725,30 @@ std::string fmtTime(int64_t t)
     struct tm tm;
     localtime_r(&tt, &tm);
     char buf[32];
-    std::strftime(buf, sizeof buf, "%d.%m.%Y %H:%M", &tm);
+    std::strftime(buf, sizeof buf, i18n::turkish() ? "%d.%m.%Y %H:%M" : "%Y-%m-%d %H:%M", &tm);
     return buf;
 }
 
 std::string fmtPct(double frac)
 {
-    return fixed1(frac * 100) + " %";
+    return fmtDecimal(frac * 100, 1) + " %";
+}
+
+std::string userName(uint32_t uid)
+{
+    static std::mutex m;
+    static std::unordered_map<uint32_t, std::string> cache;
+    std::lock_guard l(m);
+    auto it = cache.find(uid);
+    if (it != cache.end())
+        return it->second;
+    std::string name = std::to_string(uid);
+    struct passwd pw, *res = nullptr;
+    char buf[4096];
+    if (getpwuid_r(uid_t(uid), &pw, buf, sizeof buf, &res) == 0 && res)
+        name = res->pw_name;
+    cache.emplace(uid, name);
+    return name;
 }
 
 // ───────────────────────────── Renkler ─────────────────────────────
@@ -765,4 +801,29 @@ RGBf dirColor()
 {
     static const RGBf c = normalizeColor(128, 128, 128);
     return c;
+}
+
+const std::vector<AgeBucket> &ageBuckets()
+{
+    constexpr int64_t DAY = 86400;
+    static const std::vector<AgeBucket> b{
+        {DAY, "today", normalizeColor(255, 40, 40)},
+        {7 * DAY, "this week", normalizeColor(255, 140, 30)},
+        {30 * DAY, "this month", normalizeColor(240, 220, 40)},
+        {182 * DAY, "6 months", normalizeColor(40, 200, 60)},
+        {365 * DAY, "1 year", normalizeColor(40, 210, 220)},
+        {2 * 365 * DAY, "2 years", normalizeColor(40, 90, 255)},
+        {5 * 365 * DAY, "5 years", normalizeColor(140, 120, 255)},
+        {INT64_MAX, "older", normalizeColor(150, 150, 150)},
+    };
+    return b;
+}
+
+RGBf ageColor(int64_t mtime, int64_t now)
+{
+    const int64_t age = now - mtime;
+    for (const AgeBucket &b : ageBuckets())
+        if (age < b.maxAge)
+            return b.color;
+    return ageBuckets().back().color;
 }

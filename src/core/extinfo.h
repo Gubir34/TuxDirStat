@@ -3,11 +3,15 @@
 // olmayan türler (oyun motorları, geliştirme araçları, önbellekler…) için bu tablo,
 // o da yoksa genel bir açıklama kullanılır. Böylece hiçbir tür açıklamasız kalmaz.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
 // Yerleşik tablodaki açıklama; bilinmiyorsa boş.
 std::string builtinExtDescription(const std::string &ext);
+
+// Yerleşik tablodaki kayıt sayısı (testler için).
+size_t builtinExtCount(bool turkish);
 
 // Her uzantı için bir açıklama üretir: "XYZ dosyası", sayısal uzantılar için sürüm/parça.
 std::string genericExtDescription(const std::string &ext);

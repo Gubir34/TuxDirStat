@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 
 #include "extinfo.h"
+#include "tools.h"
+#include "i18n.h"
 #include "session.h"
 
 #ifndef TUXDIRSTAT_VERSION
@@ -51,6 +53,10 @@ Settings Settings::load()
             s.showTreemap = b;
         else if (k == "theme" && (v == "system" || v == "light" || v == "dark"))
             s.theme = v;
+        else if (k == "language" && (v == "system" || v == "en" || v == "tr"))
+            s.language = v;
+        else if (k == "color_by_age")
+            s.colorByAge = b;
         else if (k == "group_min")
             s.groupMin = uint32_t(std::clamp(std::atoi(v.c_str()), 2, 100000));
     }
@@ -63,13 +69,15 @@ void Settings::save() const
     ::mkdir((dir.substr(0, dir.rfind('/'))).c_str(), 0700);
     ::mkdir(dir.c_str(), 0700);
     std::ofstream f(dir + "/settings.conf");
-    f << "# TuxDirStat ayarları (tüm arayüzler paylaşır)\n"
+    f << "# TuxDirStat settings (shared by all interfaces)\n"
       << "apparent=" << apparent << "\n"
       << "one_fs=" << oneFs << "\n"
       << "grouping=" << grouping << "\n"
       << "group_min=" << groupMin << "\n"
       << "show_treemap=" << showTreemap << "\n"
-      << "theme=" << theme << "\n";
+      << "theme=" << theme << "\n"
+      << "language=" << language << "\n"
+      << "color_by_age=" << colorByAge << "\n";
 }
 
 static bool darkColor(const std::string &rgb)
@@ -152,25 +160,23 @@ void writeReport(std::ostream &out, Node *root, const ReportOptions &o, double s
         v.resize(n);
     };
 
-    char secs[32];
-    std::snprintf(secs, sizeof secs, "%.2f", seconds);
-    if (char *dot = std::strchr(secs, '.'))
-        *dot = ',';
-    out << "TuxDirStat raporu: " << base << "\n"
-        << "Toplam: " << fmtSize(root->sizeOf(ap)) << " (" << (ap ? "görünür boyut" : "diskte kapladığı alan") << ") · "
-        << fmtInt(root->files) << " dosya · " << fmtInt(root->dirs) << " klasör · tarama " << secs << " sn\n";
+    out << TF("TuxDirStat report: %1", {base}) << "\n"
+        << TF("Total: %1 (%2) · %3 files · %4 folders · scanned in %5 s",
+              {fmtSize(root->sizeOf(ap)), ap ? T("apparent size") : T("size on disk"), fmtInt(root->files),
+               fmtInt(root->dirs), fmtDecimal(seconds, 2)})
+        << "\n";
 
     topN(dirs);
-    out << "\nEn büyük klasörler:\n";
+    out << "\n" << T("Largest folders:") << "\n";
     for (Node *d : dirs)
         line(d, rel(d) + "/");
 
     topN(files);
-    out << "\nEn büyük dosyalar:\n";
+    out << "\n" << T("Largest files:") << "\n";
     for (Node *f : files)
         line(f, rel(f));
 
-    out << "\nUzantılar:\n";
+    out << "\n" << T("Extensions:") << "\n";
     std::vector<ExtStat> st = computeExtStats(root);
     std::vector<uint32_t> ids;
     for (uint32_t i = 0; i < st.size(); ++i)
@@ -181,7 +187,7 @@ void writeReport(std::ostream &out, Node *root, const ReportOptions &o, double s
     for (size_t i = 0; i < std::min(o.top, ids.size()); ++i) {
         const uint32_t e = ids[i];
         out << "  " << pad(fmtSize(extBytes(e)), 10) << "  " << pad(fmtPct(double(extBytes(e)) / total), 7) << "  "
-            << pad(fmtInt(st[e].count), 9) << " dosya  " << (e ? "." + ExtTable::name(e) : std::string("(uzantısız)"))
+            << pad(fmtInt(st[e].count), 9) << " " << T("files") << "  " << (e ? "." + ExtTable::name(e) : std::string(T("(no extension)")))
             << "  — " << describeExt(e) << "\n";
     }
 
@@ -190,9 +196,9 @@ void writeReport(std::ostream &out, Node *root, const ReportOptions &o, double s
             return a->files + a->dirs > b->files + b->dirs;
         });
         groups.resize(std::min(o.top, groups.size()));
-        out << "\nEn kalabalık gruplar (eşik " << o.groupMin << "):\n";
+        out << "\n" << TF("Most crowded groups (threshold %1):", {std::to_string(o.groupMin)}) << "\n";
         if (groups.empty())
-            out << "  (grup yok)\n";
+            out << "  " << T("(no groups)") << "\n";
         for (Node *g : groups)
             line(g, rel(g->parent) + "/" + displayName(g, false));
     }
@@ -200,29 +206,61 @@ void writeReport(std::ostream &out, Node *root, const ReportOptions &o, double s
 
 // ───────────────────────────── Komut satırı ─────────────────────────────
 
-static void usage(const char *prog)
+namespace {
+
+bool takesValue(const std::string &a)
 {
-    std::cout << "Kullanım: " << prog << " [klasör]\n"
-              << "          " << prog << " --report [seçenekler] <klasör>\n\n"
-              << "Seçenekler (--report ile):\n"
-              << "  --top N        her listede N satır (varsayılan 15)\n"
-              << "  --apparent     görünür boyutu kullan (varsayılan: diskte kapladığı alan)\n"
-              << "  --group        benzer öğeleri grupla ve en kalabalık grupları listele\n"
-              << "  --group-min N  grup için en az öğe sayısı (varsayılan " << GROUP_MIN << ")\n"
-              << "  --all-fs       başka dosya sistemlerine de geç\n"
-              << "  -h, --help     bu yardımı göster\n"
-              << "  --version      sürümü göster\n";
+    return a == "--top" || a == "--group-min" || a == "--find" || a == "--export" || a == "--csv" ||
+           a == "--compare" || a == "--import" || a == "--lang";
 }
+
+void usage(const char *prog)
+{
+    std::cout << TF("Usage: %1 [folder]", {prog}) << "\n"
+              << "       " << TF("%1 [options] <folder>   (no window when an output option is given)", {prog}) << "\n\n"
+              << T("Output options (can be combined):") << "\n"
+              << "  --report          " << T("text report: largest folders, files and extensions") << "\n"
+              << "  --find QUERY      " << T("search, e.g. --find '*.iso >1G older:1y'") << "\n"
+              << "  --duplicates      " << T("list duplicate files (compares contents)") << "\n"
+              << "  --cleanup         " << T("caches, build output and other things that can be cleaned") << "\n"
+              << "  --owners          " << T("disk usage per owner") << "\n"
+              << "  --unowned         " << T("files under /usr, /etc and /opt that no pacman package owns") << "\n"
+              << "  --export FILE     " << T("save the scan as a snapshot (ncdu JSON format)") << "\n"
+              << "  --csv FILE        " << T("write every file and folder to a CSV file") << "\n"
+              << "  --compare FILE    " << T("show what changed since an earlier snapshot") << "\n\n"
+              << T("Other options:") << "\n"
+              << "  --import FILE     " << T("read a snapshot (TuxDirStat or ncdu -o) instead of scanning") << "\n"
+              << "  --top N           " << TF("rows per report list (default %1)", {"15"}) << "\n"
+              << "  --apparent        " << T("use apparent size (default: size on disk)") << "\n"
+              << "  --group           " << T("group similar items and list the most crowded groups") << "\n"
+              << "  --group-min N     " << TF("minimum items per group (default %1)", {std::to_string(GROUP_MIN)}) << "\n"
+              << "  --all-fs          " << T("cross into other file systems") << "\n"
+              << "  --lang en|tr      " << T("interface language") << "\n"
+              << "  -h, --help        " << T("show this help") << "\n"
+              << "  --version         " << T("show the version") << "\n";
+}
+
+}  // namespace
 
 std::string pathArgument(int argc, char **argv)
 {
     for (int i = 1; i < argc; ++i) {
-        if (argv[i][0] == '-') {
-            if (!std::strcmp(argv[i], "--top") || !std::strcmp(argv[i], "--group-min"))
-                ++i;  // değer alan seçenekler
+        const std::string a = argv[i];
+        if (a == "--") {
+            if (i + 1 < argc) {
+                std::string p = argv[i + 1];
+                if (p.rfind("~/", 0) == 0)
+                    p = homeDir() + p.substr(1);
+                return p;
+            }
+            return {};
+        }
+        if (a[0] == '-') {
+            if (takesValue(a))
+                ++i;
             continue;
         }
-        std::string p = argv[i];
+        std::string p = a;
         if (p.rfind("~/", 0) == 0)
             p = homeDir() + p.substr(1);
         return p;
@@ -233,16 +271,28 @@ std::string pathArgument(int argc, char **argv)
 int runCommandLine(int argc, char **argv)
 {
     const char *prog = std::strrchr(argv[0], '/') ? std::strrchr(argv[0], '/') + 1 : argv[0];
-    bool report = false, oneFs = true;
+    std::string lang;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (!std::strcmp(argv[i], "--lang"))
+            lang = argv[i + 1];
+    i18n::init(lang.empty() ? Settings::load().language : lang);
+    i18n::applyToEnvironment();
+
+    bool oneFs = true, cli = false;
     ReportOptions o;
+    // Çıktılar komut satırındaki sırayla üretilir.
+    std::vector<std::pair<std::string, std::string>> outputs;
+    std::string importFile;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        auto value = [&]() -> long {
+        if (a == "--")
+            break;
+        auto value = [&]() -> std::string {
             if (i + 1 >= argc) {
-                std::cerr << prog << ": " << a << " bir değer bekliyor\n";
+                std::cerr << prog << ": " << TF("%1 needs a value", {a}) << "\n";
                 std::exit(2);
             }
-            return std::atol(argv[++i]);
+            return argv[++i];
         };
         if (a == "-h" || a == "--help") {
             usage(prog);
@@ -250,48 +300,130 @@ int runCommandLine(int argc, char **argv)
         } else if (a == "--version") {
             std::cout << "TuxDirStat " << TUXDIRSTAT_VERSION << "\n";
             return 0;
-        } else if (a == "--report") {
-            report = true;
+        } else if (a == "--report" || a == "--duplicates" || a == "--cleanup" || a == "--owners" || a == "--unowned") {
+            outputs.emplace_back(a, "");
+        } else if (a == "--find" || a == "--export" || a == "--csv" || a == "--compare") {
+            outputs.emplace_back(a, value());
+        } else if (a == "--import") {
+            importFile = value();
+            cli = true;
         } else if (a == "--top") {
-            o.top = size_t(std::max(1L, value()));
+            o.top = size_t(std::max(1L, std::atol(value().c_str())));
         } else if (a == "--apparent") {
             o.apparent = true;
         } else if (a == "--group") {
             o.grouping = true;
         } else if (a == "--group-min") {
-            o.groupMin = uint32_t(std::clamp(value(), 2L, 100000L));
+            o.groupMin = uint32_t(std::clamp(std::atol(value().c_str()), 2L, 100000L));
         } else if (a == "--all-fs") {
             oneFs = false;
+        } else if (a == "--lang") {
+            value();
         } else if (a[0] == '-') {
             // Araç takımlarının kendi seçenekleri (ör. GTK'nin --display) arayüze kalır.
-            if (report) {
-                std::cerr << prog << ": bilinmeyen seçenek: " << a << "\n";
+            cli = cli || !outputs.empty();
+            if (cli) {
+                std::cerr << prog << ": " << TF("unknown option: %1", {a}) << "\n";
                 return 2;
             }
         }
     }
-    if (!report)
+    if (outputs.empty() && !cli)
         return -1;
-    std::string path = pathArgument(argc, argv);
-    if (path.empty()) {
-        std::cerr << prog << ": --report için bir klasör verin\n";
-        return 2;
+    if (outputs.empty())
+        outputs.emplace_back("--report", "");
+
+    std::unique_ptr<Tree> tree;
+    double seconds = 0;
+    if (!importFile.empty()) {
+        std::string err;
+        auto t0 = std::chrono::steady_clock::now();
+        tree = loadSnapshot(importFile, &err);
+        if (!tree) {
+            std::cerr << prog << ": " << importFile << ": " << err << "\n";
+            return 1;
+        }
+        seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    } else {
+        std::string path = pathArgument(argc, argv);
+        if (path.empty()) {
+            std::cerr << prog << ": " << T("give a folder to scan (or --import FILE)") << "\n";
+            return 2;
+        }
+        if (char *real = realpath(path.c_str(), nullptr)) {
+            path = real;
+            std::free(real);
+        }
+        Scanner sc(path, oneFs, scanWorkers());
+        sc.start();
+        while (!sc.isDone())
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (!sc.error.empty()) {
+            std::cerr << prog << ": " << sc.error << "\n";
+            return 1;
+        }
+        tree = sc.takeTree();
+        seconds = sc.elapsed;
     }
-    if (char *real = realpath(path.c_str(), nullptr)) {
-        path = real;
-        std::free(real);
+    Node *root = tree->root;
+    int rc = 0;
+    bool first = true;
+    auto sep = [&] {
+        if (!first)
+            std::cout << "\n";
+        first = false;
+    };
+    Job job("", [](Job &) {});
+    for (const auto &[opt, val] : outputs) {
+        std::string err;
+        if (opt == "--export") {
+            if (!saveSnapshot(root, val, &err)) {
+                std::cerr << prog << ": " << val << ": " << err << "\n";
+                rc = 1;
+            }
+        } else if (opt == "--csv") {
+            if (!exportCsv(root, val, &err)) {
+                std::cerr << prog << ": " << val << ": " << err << "\n";
+                rc = 1;
+            }
+        } else if (opt == "--report") {
+            sep();
+            if (o.grouping)
+                groupFiles(root, tree->scratch(), o.groupMin);
+            writeReport(std::cout, root, o, seconds);
+            if (o.grouping)
+                ungroupFiles(root, tree->scratch());
+        } else {
+            ResultTable t;
+            if (opt == "--find")
+                t = searchTree(root, val, o.apparent, &err);
+            else if (opt == "--duplicates")
+                t = findDuplicates(root, job);
+            else if (opt == "--cleanup")
+                t = findCleanup(root, o.apparent, job);
+            else if (opt == "--owners")
+                t = ownerUsage(root, o.apparent);
+            else if (opt == "--unowned") {
+                if (!havePacman()) {
+                    std::cerr << prog << ": " << T("pacman was not found; --unowned works on Arch-based systems.") << "\n";
+                    rc = 1;
+                    continue;
+                }
+                t = findUnowned(root, o.apparent, job);
+            } else if (opt == "--compare") {
+                t = compareWithSnapshot(root, val, o.apparent, job);
+            }
+            if (err.empty())
+                err = job.error;
+            job.error.clear();
+            if (!err.empty()) {
+                std::cerr << prog << ": " << err << "\n";
+                rc = 1;
+                continue;
+            }
+            sep();
+            printTable(std::cout, t);
+        }
     }
-    Scanner sc(path, oneFs, scanWorkers());
-    sc.start();
-    while (!sc.isDone())
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    if (!sc.error.empty()) {
-        std::cerr << prog << ": " << sc.error << "\n";
-        return 1;
-    }
-    std::unique_ptr<Tree> tree = sc.takeTree();
-    if (o.grouping)
-        groupFiles(tree->root, tree->scratch(), o.groupMin);
-    writeReport(std::cout, tree->root, o, sc.elapsed);
-    return 0;
+    return rc;
 }

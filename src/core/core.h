@@ -55,6 +55,7 @@ struct Node {
     uint32_t files = 0;
     uint32_t dirs = 0;
     uint32_t ext = 0;    // ExtTable kimliği (0 = uzantısız)
+    uint32_t uid = 0;    // sahibi
     uint32_t sgen = 0;
     int32_t row = 0;
     std::atomic<int32_t> pend{0};  // tarama sırasında bitmemiş alt klasör sayısı + 1
@@ -123,6 +124,7 @@ namespace ExtTable {
 uint32_t intern(std::string_view e);
 std::string name(uint32_t id);
 uint32_t count();
+uint32_t forName(std::string_view fileName);  // dosya adının uzantı kimliği
 }
 
 struct ExtStat {
@@ -201,6 +203,8 @@ std::string fmtSize(uint64_t b);
 std::string fmtInt(uint64_t n);
 std::string fmtTime(int64_t t);
 std::string fmtPct(double frac);
+std::string fmtDecimal(double v, int digits);
+std::string userName(uint32_t uid);  // bulunamazsa sayı
 
 struct RGBf {
     float r, g, b;
@@ -209,3 +213,13 @@ constexpr float PALETTE_BRIGHTNESS = 0.6f;
 RGBf normalizeColor(int r, int g, int b, float brightness = PALETTE_BRIGHTNESS);
 const std::vector<RGBf> &palette();
 RGBf dirColor();
+
+// Treemap renklendirmesi: uzantıya ya da son değişiklik yaşına göre.
+enum class ColorMode { Extension, Age };
+struct AgeBucket {
+    int64_t maxAge;     // saniye; son kova için INT64_MAX
+    const char *label;  // İngilizce; T() ile çevrilir
+    RGBf color;
+};
+const std::vector<AgeBucket> &ageBuckets();
+RGBf ageColor(int64_t mtime, int64_t now);

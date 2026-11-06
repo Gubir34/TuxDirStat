@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Gubir34 -->
+<component type="desktop-application">
+  <id>io.github.gubir34.TuxDirStat</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>TuxDirStat</name>
+  <summary>See what takes up space on your disks</summary>
+  <summary xml:lang="tr">Disklerinizde neyin yer kapladığını görün</summary>
+  <developer id="io.github.gubir34">
+    <name>Gubir34</name>
+  </developer>
+  <description>
+    <p>
+      TuxDirStat is a fast disk usage analyzer in the spirit of WinDirStat. It shows a folder tree sorted
+      by size, a list of file types and a shaded treemap where every file is a box.
+    </p>
+    <ul>
+      <li>Multithreaded scanning that handles millions of files</li>
+      <li>Groups the many small asset files of games into single boxes</li>
+      <li>Finds duplicate files by comparing their contents</li>
+      <li>Suggests caches, build output and other things that can be cleaned</li>
+      <li>Saves scans as snapshots (ncdu-compatible) and shows what changed since then</li>
+      <li>Searches by name, size, age, type and owner</li>
+      <li>Colors the treemap by file age, shows usage per owner and exports CSV</li>
+      <li>On Arch Linux, shows which package owns a file and lists files no package owns</li>
+      <li>Qt, GTK 3, GTK 4 and Tk interfaces, light and dark themes, English and Turkish</li>
+    </ul>
+    <p xml:lang="tr">
+      TuxDirStat, WinDirStat tarzında hızlı bir disk kullanım analizörüdür. Boyuta göre sıralı klasör ağacını,
+      dosya türü listesini ve her dosyanın bir kutu olduğu gölgeli treemap'i gösterir.
+    </p>
+  </description>
+  <launchable type="desktop-id">tuxdirstat.desktop</launchable>
+  <icon type="stock">tuxdirstat</icon>
+  <url type="homepage">https://github.com/Gubir34/TuxDirStat</url>
+  <url type="bugtracker">https://github.com/Gubir34/TuxDirStat/issues</url>
+  <url type="vcs-browser">https://github.com/Gubir34/TuxDirStat</url>
+  <categories>
+    <category>System</category>
+    <category>Filesystem</category>
+  </categories>
+  <keywords>
+    <keyword>disk</keyword>
+    <keyword>usage</keyword>
+    <keyword>treemap</keyword>
+    <keyword>windirstat</keyword>
+    <keyword>duplicates</keyword>
+  </keywords>
+  <provides>
+    <binary>tuxdirstat</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.4" date="2026-11-06">
+      <description>
+        <p>English interface (Turkish stays available), duplicate finder, cleanup suggestions, snapshots and
+        comparison, search, age coloring, usage per owner, CSV export, pacman checks, administrator scans,
+        an app icon, a man page and shell completions.</p>
+      </description>
+    </release>
+    <release version="1.3" date="2026-11-04"/>
+  </releases>
+</component>

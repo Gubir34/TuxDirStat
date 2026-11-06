@@ -2,9 +2,11 @@
 // Çalıştırma: cmake -DTUXDIRSTAT_TESTS=ON … && ctest --test-dir build
 
 #include <chrono>
+#include <clocale>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -14,6 +16,8 @@
 #include <unistd.h>
 
 #include "extinfo.h"
+#include "i18n.h"
+#include "tools.h"
 #include "report.h"
 #include "session.h"
 
@@ -75,8 +79,162 @@ static bool consistent(Node *n)
     return size == n->size && alloc == n->alloc && files == n->files && dirs == n->dirs;
 }
 
+static std::unique_ptr<Tree> loadAsync(const std::string &file, Session &s)
+{
+    s.openSnapshot(file);
+    Session::Result r;
+    while ((r = s.poll()) == Session::Result::Running)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    CHECK(r == Session::Result::NewTree);
+    return nullptr;
+}
+
+static bool sameTotals(const Node *a, const Node *b)
+{
+    return a->size == b->size && a->alloc == b->alloc && a->files == b->files && a->dirs == b->dirs;
+}
+
+// Yeni araçlar: arama, kopyalar, anlık görüntü, karşılaştırma, CSV, sahipler, temizlik.
+static void toolTests(const std::string &dir)
+{
+    // Arayüzler setlocale() çağırır; biçimlendirme C yerelinden etkilenmemeli.
+    std::setlocale(LC_ALL, "tr_TR.UTF-8");
+    i18n::init("en");
+    ::mkdir((dir + "/dup").c_str(), 0755);
+    std::ofstream(dir + "/dup/a.bin", std::ios::binary) << std::string(70000, 'q') << "end";
+    std::ofstream(dir + "/dup/b.bin", std::ios::binary) << std::string(70000, 'q') << "end";
+    std::ofstream(dir + "/dup/c.bin", std::ios::binary) << std::string(70000, 'q') << "END";  // aynı boyut, farklı son
+    CHECK(::link((dir + "/dup/a.bin").c_str(), (dir + "/dup/hard.bin").c_str()) == 0);   // sabit bağ: kopya değil
+    ::mkdir((dir + "/proj").c_str(), 0755);
+    ::mkdir((dir + "/proj/node_modules").c_str(), 0755);
+    writeFile(dir + "/proj/node_modules/x.js", 1500000);
+    ::mkdir((dir + "/proj/build").c_str(), 0755);
+    writeFile(dir + "/proj/build/CMakeCache.txt", 1500000);
+    writeFile(dir + "/proj/movie.mp4.part", 1500000);
+
+    auto tree = scan(dir);
+    Node *root = tree->root;
+    Job job("test", [](Job &) {});
+
+    // — kopyalar —
+    ResultTable d = findDuplicates(root, job);
+    // Üç küme: dup/ içindeki a|hard + b, içerikleri aynı 5 .wav ve proj/ altındaki 3 dosya.
+    std::vector<int> dupRows;
+    for (size_t i = 0; i < d.rows.size(); ++i)
+        if (d.rows[i].path.find("/dup/") != std::string::npos)
+            dupRows.push_back(int(i));
+    CHECK(d.grouped && d.rows.size() == 2 + 5 + 3);
+    CHECK(dupRows.size() == 2 && d.rows[size_t(dupRows[0])].group == d.rows[size_t(dupRows[1])].group);
+    for (int i : dupRows)
+        CHECK(d.rows[size_t(i)].path.find("c.bin") == std::string::npos);
+    CHECK(!deletionWarning(d, dupRows).empty());
+    CHECK(deletionWarning(d, {dupRows[0]}).empty());
+
+    // — arama —
+    std::string err;
+    ResultTable q = searchTree(root, "*.wav >100K", true, &err);
+    CHECK(err.empty() && q.rows.size() == 5);
+    q = searchTree(root, "type:d node", true, &err);
+    CHECK(q.rows.size() == 1 && q.rows[0].node && q.rows[0].node->nameView() == "node_modules");
+    q = searchTree(root, "ext:wav,.exe newer:1d", true, &err);
+    CHECK(q.rows.size() == 6);
+    q = searchTree(root, "older:2y", true, &err);
+    CHECK(q.rows.empty());
+    searchTree(root, ">12Q", true, &err);
+    CHECK(!err.empty());
+
+    // — temizlik —
+    ResultTable c = findCleanup(root, true, job);
+    auto hasPath = [&](const ResultTable &t, const std::string &p) {
+        for (const ResultRow &r : t.rows)
+            if (r.path == p)
+                return true;
+        return false;
+    };
+    CHECK(hasPath(c, dir + "/proj/node_modules"));
+    CHECK(hasPath(c, dir + "/proj/build"));
+    CHECK(hasPath(c, dir + "/proj/movie.mp4.part"));
+
+    // — sahipler —
+    ResultTable ow = ownerUsage(root, true);
+    CHECK(ow.rows.size() == 1 && ow.rows[0].cells[0].find("(" + std::to_string(getuid()) + ")") != std::string::npos);
+
+    // — anlık görüntü: kaydet, yükle, karşılaştır —
+    const std::string snap = dir + "/../" + std::string(std::strrchr(dir.c_str(), '/') + 1) + ".json";
+    CHECK(saveSnapshot(root, snap, &err));
+    int64_t ts = 0;
+    auto loaded = loadSnapshot(snap, &err, &ts);
+    CHECK(loaded && ts > 0);
+    CHECK(loaded && consistent(loaded->root) && sameTotals(loaded->root, root));
+    CHECK(loaded && loaded->root->path() == root->path());
+    Session ls;
+    loadAsync(snap, ls);
+    ls.commitNewTree();
+    CHECK(ls.root() && sameTotals(ls.root(), root) && !ls.ext.empty());
+    writeFile(dir + "/content/new.bin", 123456);
+    auto again = scan(dir);
+    ResultTable cmp = compareTrees(again->root, loaded->root, ts, true);
+    CHECK(!cmp.rows.empty() && hasPath(cmp, dir + "/content/new.bin"));
+    CHECK(hasPath(cmp, dir + "/content"));
+
+    // — ncdu biçimi —
+    const std::string ncdu = dir + "/../ncdu-" + std::string(std::strrchr(dir.c_str(), '/') + 1) + ".json";
+    std::ofstream(ncdu) << R"([1,1,{"progname":"ncdu","progver":"1.19","timestamp":1700000000},
+[{"name":"/data","asize":4096,"dsize":4096,"dev":2049,"ino":2},
+{"name":"caf\u00e9.txt","asize":10,"dsize":4096,"ino":3},
+[{"name":"sub","asize":4096,"dsize":4096,"ino":4,"read_error":true},
+{"name":"x \"q\".iso","asize":1000000,"dsize":1003520,"ino":5,"mtime":1600000000}],
+{"name":"mnt","excluded":"othfs"},
+{"name":"lnk","asize":7,"dsize":0,"notreg":true}]])";
+    auto nt = loadSnapshot(ncdu, &err, &ts);
+    CHECK(nt && ts == 1700000000);
+    if (nt) {
+        Node *r = nt->root;
+        CHECK(r->files == 3 && r->dirs == 2 && r->alloc == 4096 + 1003520);
+        CHECK(child(r, "café.txt") != nullptr);
+        Node *sub = child(r, "sub");
+        CHECK(sub && (sub->flags & F_ERROR) && child(sub, "x \"q\".iso"));
+        CHECK(child(r, "mnt") && (child(r, "mnt")->flags & F_MOUNT));
+        CHECK(child(r, "lnk") && (child(r, "lnk")->flags & F_LINK));
+    }
+    std::ofstream(ncdu) << "[1,2,{},[{\"name\":\"/x\"},{\"name\":";
+    CHECK(!loadSnapshot(ncdu, &err) && !err.empty());
+
+    // — CSV —
+    const std::string csv = dir + "/../" + std::string(std::strrchr(dir.c_str(), '/') + 1) + ".csv";
+    CHECK(exportCsv(root, csv, &err));
+    std::ifstream cf(csv);
+    std::string line;
+    size_t lines = 0;
+    while (std::getline(cf, line))
+        ++lines;
+    CHECK(lines == 1 + 1 + root->files + root->dirs);  // başlık + kök + her öğe
+
+    // — yaş renkleri —
+    const int64_t now = std::time(nullptr);
+    CHECK(ageColor(now, now).r == ageBuckets().front().color.r);
+    CHECK(ageColor(now - 10LL * 365 * 86400, now).b == ageBuckets().back().color.b);
+
+    // — İngilizce biçim ve metinler —
+    CHECK(fmtSize(1536) == "1.5 KB");
+    CHECK(fmtInt(1234567) == "1,234,567");
+    CHECK(fmtPct(0.125) == "12.5 %");
+    CHECK(describeExt(0) == "Files without an extension");
+    CHECK(builtinExtDescription("dds") == "DirectDraw texture");
+    CHECK(genericExtDescription("xyz") == "XYZ file");
+    CHECK(builtinExtCount(true) == builtinExtCount(false));
+    CHECK(std::string(T("Size")) == "Size");
+    i18n::init("tr");
+    CHECK(std::string(T("Size")) == "Boyut");
+    CHECK(TF("%1 files", {"3"}) == "3 dosya");
+    ::unlink(snap.c_str());
+    ::unlink(ncdu.c_str());
+    ::unlink(csv.c_str());
+}
+
 int main()
 {
+    i18n::init("tr");
     char tmpl[] = "/tmp/tuxdirstat-test-XXXXXX";
     const std::string dir = mkdtemp(tmpl);
     // Oyun klasörüne benzer bir yapı
@@ -222,6 +380,8 @@ int main()
     CHECK(fmtSize(1536) == "1,5 KB");
     CHECK(fmtInt(1234567) == "1.234.567");
     CHECK(fmtPct(0.125) == "12,5 %");
+
+    toolTests(dir);
 
     removePath(dir, nullptr);
     if (failures)

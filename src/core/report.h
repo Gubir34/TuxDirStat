@@ -14,7 +14,9 @@ struct Settings {
     bool grouping = false;
     bool showTreemap = true;
     uint32_t groupMin = GROUP_MIN;
-    std::string theme = "system";  // "system", "light" ya da "dark"
+    std::string theme = "system";     // "system", "light" ya da "dark"
+    std::string language = "system";  // "system", "en" ya da "tr"
+    bool colorByAge = false;          // treemap'i son değişiklik yaşına göre renklendir
 
     static Settings load();
     void save() const;

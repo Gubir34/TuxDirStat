@@ -4,11 +4,21 @@
 #include <unordered_map>
 
 #include "core.h"
+#include "i18n.h"
 
 namespace {
 
-// Uzantı (küçük harf) → açıklama. MIME veritabanlarında çoğunlukla bulunmayan türler.
-const std::unordered_map<std::string, const char *> &table()
+// Uzantı (küçük harf) → İngilizce açıklama.
+const std::unordered_map<std::string, const char *> &tableEn()
+{
+    static const std::unordered_map<std::string, const char *> t{
+#include "extinfo_en.inc"
+    };
+    return t;
+}
+
+// Uzantı (küçük harf) → Türkçe açıklama. MIME veritabanlarında çoğunlukla bulunmayan türler.
+const std::unordered_map<std::string, const char *> &tableTr()
 {
     static const std::unordered_map<std::string, const char *> t{
         // — genel veri —
@@ -493,25 +503,31 @@ bool allDigits(const std::string &s)
 
 std::string builtinExtDescription(const std::string &ext)
 {
-    auto it = table().find(ext);
-    return it != table().end() ? it->second : std::string();
+    const auto &t = i18n::turkish() ? tableTr() : tableEn();
+    auto it = t.find(ext);
+    return it != t.end() ? it->second : std::string();
+}
+
+size_t builtinExtCount(bool turkish)
+{
+    return (turkish ? tableTr() : tableEn()).size();
 }
 
 std::string genericExtDescription(const std::string &ext)
 {
     if (allDigits(ext))
-        return "Numaralı dosya (sürüm, parça ya da kılavuz bölümü)";
+        return T("Numbered file (version, part or manual section)");
     std::string up = ext;
     for (char &c : up)
         if (c >= 'a' && c <= 'z')
             c = char(c - 32);
-    return up + " dosyası";
+    return TF("%1 file", {up});
 }
 
 std::string describeExt(uint32_t ext, const std::string &systemDescription)
 {
     if (ext == 0)
-        return "Uzantısız dosyalar";
+        return T("Files without an extension");
     if (!systemDescription.empty())
         return systemDescription;
     const std::string name = ExtTable::name(ext);

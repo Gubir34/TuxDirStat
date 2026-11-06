@@ -1,0 +1,123 @@
+.TH TUXDIRSTAT 1 "2026-11-06" "TuxDirStat 1.4" "User Commands"
+.SH NAME
+tuxdirstat, tuxdirstat-gtk3, tuxdirstat-gtk4, tuxdirstat-tk \- disk usage analyzer with tree, extension list and treemap
+.SH SYNOPSIS
+.B tuxdirstat
+.RI [ folder | snapshot.json ]
+.br
+.B tuxdirstat
+.I output-options
+.RI [ other-options ]
+.I folder
+.br
+.B tuxdirstat
+.I output-options
+.B \-\-import
+.I snapshot.json
+.SH DESCRIPTION
+.B TuxDirStat
+scans a folder and shows how its space is used: a tree sorted by size, a list of file
+extensions and a shaded treemap where every file is a box whose area matches its size.
+.B tuxdirstat
+is the Qt interface;
+.BR tuxdirstat-gtk3 ,
+.B tuxdirstat-gtk4
+and
+.B tuxdirstat-tk
+are the same program with other toolkits. All of them share the command line options below.
+.PP
+Without an output option a window opens. Giving a folder scans it right away; giving a
+snapshot file opens it instead.
+.PP
+The window also offers duplicate file search, cleanup suggestions, search, snapshot
+comparison, usage by owner, CSV export, age coloring, an administrator (read-only) scan
+through
+.BR pkexec (1)
+and, on Arch Linux, package ownership checks.
+.SH OUTPUT OPTIONS
+These print results (or write files) and exit without opening a window. They can be
+combined; each runs in the order given.
+.TP
+.B \-\-report
+Text report: the largest folders, files and extensions.
+.TP
+.BI \-\-find " query"
+Search the scan. Words match file names (\fB*\fR and \fB?\fR are wildcards). Filters:
+\fB>100M\fR, \fB<1G\fR (size), \fBolder:1y\fR, \fBnewer:2w\fR (last change; units h, d, w, m, y),
+\fBtype:f\fR or \fBtype:d\fR, \fBext:mp4,mkv\fR, \fBuser:\fIname\fR and \fBpath:\fItext\fR.
+.TP
+.B \-\-duplicates
+List files with identical contents. Sizes are compared first, then the first 64 KB and then
+the whole file. Hard links to the same data are not reported.
+.TP
+.B \-\-cleanup
+Caches, build output (node_modules, CMake and Cargo build folders, Python caches), trash,
+unfinished downloads, the pacman cache, the systemd journal, crash dumps and unused
+Docker, Podman or Flatpak data.
+.TP
+.B \-\-owners
+Disk usage per file owner.
+.TP
+.B \-\-unowned
+Arch Linux: files and folders under /usr, /etc and /opt that no pacman package owns.
+Scan / (or one of those folders) for this.
+.TP
+.BI \-\-export " file"
+Save the scan as a snapshot in the ncdu JSON export format.
+.TP
+.BI \-\-csv " file"
+Write every file and folder to a CSV file.
+.TP
+.BI \-\-compare " snapshot"
+Show what grew, shrank, appeared or disappeared since an earlier snapshot.
+.SH OTHER OPTIONS
+.TP
+.BI \-\-import " file"
+Read a snapshot (written by TuxDirStat or by \fBncdu \-o\fR) instead of scanning.
+Files ending in .gz, .zst, .xz or .bz2 are decompressed first.
+.TP
+.BI \-\-top " n"
+Rows per list in \fB\-\-report\fR (default 15).
+.TP
+.B \-\-apparent
+Use the apparent file size instead of the space used on disk.
+.TP
+.B \-\-group
+Group many similar items (such as game assets) in \fB\-\-report\fR and list the most crowded groups.
+.TP
+.BI \-\-group\-min " n"
+Minimum number of items per group (default 16).
+.TP
+.B \-\-all\-fs
+Cross into other file systems. By default the scan stays on the starting file system
+(btrfs subvolumes of the same device are included) and always skips virtual file systems.
+.TP
+.BI \-\-lang " en|tr"
+Interface language. The default follows the saved setting, then the locale.
+.TP
+.BR \-h ", " \-\-help
+Show a short help.
+.TP
+.B \-\-version
+Show the version.
+.SH FILES
+.TP
+.I ~/.config/tuxdirstat/settings.conf
+Settings shared by all interfaces: size mode, grouping, theme, language, age coloring.
+.SH EXAMPLES
+.nf
+tuxdirstat ~/Games
+tuxdirstat \-\-report \-\-top 20 /var
+tuxdirstat \-\-find '*.iso >1G older:1y' ~
+tuxdirstat \-\-export home\-$(date +%F).json ~
+tuxdirstat \-\-compare home\-2026\-10\-01.json ~
+sudo tuxdirstat \-\-unowned /
+.fi
+.SH EXIT STATUS
+0 on success, 1 if a scan, file or tool failed, 2 for wrong usage.
+.SH SEE ALSO
+.BR du (1),
+.BR ncdu (1),
+.BR pacman (8)
+.SH LICENSE
+GPL\-3.0\-or\-later. https://github.com/Gubir34/TuxDirStat
