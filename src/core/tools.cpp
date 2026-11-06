@@ -1228,14 +1228,12 @@ void writeInfo(JsonOut &o, const Node *n, std::string_view name)
 
 bool saveSnapshot(const Node *root, const std::string &file, std::string *err)
 {
-    std::FILE *f = std::fopen(file.c_str(), "w");
-    if (!f) {
-        if (err)
-            *err = std::strerror(errno);
+    std::FILE *f = openOutput(file, err);
+    if (!f)
         return false;
-    }
     std::vector<char> buf(1 << 20);
-    std::setvbuf(f, buf.data(), _IOFBF, buf.size());
+    if (f != stdout)
+        std::setvbuf(f, buf.data(), _IOFBF, buf.size());
     JsonOut o(f);
     std::fprintf(f, "[1,2,{\"progname\":\"tuxdirstat\",\"progver\":\"%s\",\"timestamp\":%lld},\n", TUXDIRSTAT_VERSION,
                  static_cast<long long>(std::time(nullptr)));
@@ -1268,13 +1266,7 @@ bool saveSnapshot(const Node *root, const std::string &file, std::string *err)
             writeInfo(o, c, c->nameView());
     }
     o.raw("]\n");
-    const bool ok = !std::ferror(f);
-    if (std::fclose(f) != 0 || !ok) {
-        if (err)
-            *err = std::strerror(errno);
-        return false;
-    }
-    return true;
+    return closeOutput(f, err);
 }
 
 namespace {
@@ -1542,6 +1534,11 @@ std::unique_ptr<Tree> loadSnapshot(const std::string &file, std::string *err, in
     std::string data;
     if (!readFile(file, data, err))
         return nullptr;
+    return parseSnapshot(data, err, timestamp, cancel);
+}
+
+std::unique_ptr<Tree> parseSnapshot(const std::string &data, std::string *err, int64_t *timestamp, const std::atomic<bool> *cancel)
+{
     if (data.rfind("\xbf" "ncduEX1", 0) == 0) {
         if (err)
             *err = T("This is an ncdu binary export. Export with ncdu -o (JSON) instead.");
@@ -1738,14 +1735,12 @@ ResultTable compareWithSnapshot(Node *root, const std::string &file, bool appare
 
 bool exportCsv(const Node *root, const std::string &file, std::string *err)
 {
-    std::FILE *f = std::fopen(file.c_str(), "w");
-    if (!f) {
-        if (err)
-            *err = std::strerror(errno);
+    std::FILE *f = openOutput(file, err);
+    if (!f)
         return false;
-    }
     std::vector<char> buf(1 << 20);
-    std::setvbuf(f, buf.data(), _IOFBF, buf.size());
+    if (f != stdout)
+        std::setvbuf(f, buf.data(), _IOFBF, buf.size());
     auto field = [f](const std::string &s) {
         if (s.find_first_of(",\"\n\r") == std::string::npos) {
             std::fwrite(s.data(), 1, s.size(), f);
@@ -1790,11 +1785,5 @@ bool exportCsv(const Node *root, const std::string &file, std::string *err)
                 st.push_back({kids[i], base + "/" + std::string(kids[i]->nameView())});
         }
     }
-    const bool ok = !std::ferror(f);
-    if (std::fclose(f) != 0 || !ok) {
-        if (err)
-            *err = std::strerror(errno);
-        return false;
-    }
-    return true;
+    return closeOutput(f, err);
 }

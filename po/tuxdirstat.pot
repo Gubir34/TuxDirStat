@@ -1,0 +1,1573 @@
+# Template for TuxDirStat translations. Copy to po/<language>.po and fill in msgstr.
+# %1 … %9 are placeholders; keep them in the translation.
+msgid ""
+msgstr ""
+"Project-Id-Version: TuxDirStat\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: \n"
+"X-Decimal-Point: .\n"
+"X-Thousands-Separator: ,\n"
+"X-Date-Format: %Y-%m-%d %H:%M\n"
+
+#: src/core/core.cpp:189
+msgid "no extension"
+msgstr ""
+
+#: src/core/core.cpp:199
+msgid "small files"
+msgstr ""
+
+#: src/core/core.cpp:203
+msgid "small folders"
+msgstr ""
+
+#: src/core/core.cpp:271
+msgid "%1 folders"
+msgstr ""
+
+#: src/core/core.cpp:271
+msgid "%1 files"
+msgstr ""
+
+#: src/core/core.cpp:273
+msgid "no access"
+msgstr ""
+
+#: src/core/core.cpp:275
+msgid "other file system"
+msgstr ""
+
+#: src/core/core.cpp:525
+msgid "Not a folder: %1"
+msgstr ""
+
+#: src/core/core.cpp:796
+msgid "today"
+msgstr ""
+
+#: src/core/core.cpp:797
+msgid "this week"
+msgstr ""
+
+#: src/core/core.cpp:798
+msgid "this month"
+msgstr ""
+
+#: src/core/core.cpp:799
+msgid "6 months"
+msgstr ""
+
+#: src/core/core.cpp:800
+msgid "1 year"
+msgstr ""
+
+#: src/core/core.cpp:801
+msgid "2 years"
+msgstr ""
+
+#: src/core/core.cpp:802
+msgid "5 years"
+msgstr ""
+
+#: src/core/core.cpp:803
+msgid "older"
+msgstr ""
+
+#: src/core/export.cpp:137
+msgid "Could not compress the image."
+msgstr ""
+
+#: src/core/export.cpp:283
+msgid "TuxDirStat report: %1"
+msgstr ""
+
+#: src/core/export.cpp:296
+msgid "Created by TuxDirStat %1 on %2"
+msgstr ""
+
+#: src/core/export.cpp:297
+msgid "apparent size"
+msgstr ""
+
+#: src/core/export.cpp:297
+msgid "size on disk"
+msgstr ""
+
+#: src/core/export.cpp:300
+msgid "Total size"
+msgstr ""
+
+#: src/core/export.cpp:301
+msgid "Files"
+msgstr ""
+
+#: src/core/export.cpp:302
+msgid "Folders"
+msgstr ""
+
+#: src/core/export.cpp:305
+msgid "Free on this disk"
+msgstr ""
+
+#: src/core/export.cpp:307
+msgid "Map"
+msgstr ""
+
+#: src/core/export.cpp:313
+msgid "Size"
+msgstr ""
+
+#: src/core/export.cpp:329
+msgid "Contents"
+msgstr ""
+
+#: src/core/export.cpp:330
+msgid "Largest files"
+msgstr ""
+
+#: src/core/export.cpp:332
+msgid "File types"
+msgstr ""
+
+#: src/core/export.cpp:332
+msgid "Extension"
+msgstr ""
+
+#: src/core/export.cpp:332
+msgid "Type"
+msgstr ""
+
+#: src/core/export.cpp:335
+msgid "(none)"
+msgstr ""
+
+#: src/core/export.cpp:340
+msgid "Made with TuxDirStat"
+msgstr ""
+
+#: src/core/extinfo.cpp:502
+msgid "Numbered file (version, part or manual section)"
+msgstr ""
+
+#: src/core/extinfo.cpp:507
+msgid "%1 file"
+msgstr ""
+
+#: src/core/extinfo.cpp:513
+msgid "Files without an extension"
+msgstr ""
+
+#: src/core/history.cpp:175
+msgid "systemd was not found; run \"tuxdirstat --history-record\" regularly yourself (e.g. from cron)."
+msgstr ""
+
+#: src/core/history.cpp:194
+msgid "Could not enable the weekly timer (systemctl --user enable --now tuxdirstat-history.timer)."
+msgstr ""
+
+#: src/core/history.cpp:204
+msgid "Only local folders can be recorded."
+msgstr ""
+
+#: src/core/history.cpp:215
+msgid "No folders are recorded. Turn it on in the Tools menu (Record size history)."
+msgstr ""
+
+#: src/core/history.cpp:224
+msgid "Recorded %1: %2"
+msgstr ""
+
+#: src/core/history.cpp:226
+msgid "scan cancelled"
+msgstr ""
+
+#: src/core/history.cpp:259
+msgid "Size history"
+msgstr ""
+
+#: src/core/history.cpp:261
+msgid "No size history for %1 yet. Turn on \"Record size history\" in the Tools menu; it saves the current scan now and the sizes every week."
+msgstr ""
+
+#: src/core/history.cpp:291
+msgid "Reading %1…"
+msgstr ""
+
+#: src/core/history.cpp:307
+msgid "Name"
+msgstr ""
+
+#: src/core/history.cpp:313
+msgid "Now"
+msgstr ""
+
+#: src/core/history.cpp:313
+msgid "Change"
+msgstr ""
+
+#: src/core/history.cpp:313
+msgid "Trend"
+msgstr ""
+
+#: src/core/history.cpp:343
+msgid "(total)"
+msgstr ""
+
+#: src/core/history.cpp:345
+msgid "%1 recorded sizes since %2 · total %3 → %4 (%5)"
+msgstr ""
+
+#: src/core/history.cpp:348
+msgid "Weekly recording is off for this folder."
+msgstr ""
+
+#: src/core/history.cpp:361
+msgid "Only local scans are kept."
+msgstr ""
+
+#: src/core/remote.cpp:130
+msgid "The remote folder could not be read."
+msgstr ""
+
+#: src/core/remote.cpp:135
+msgid "The remote path is not a folder."
+msgstr ""
+
+#: src/core/remote.cpp:175
+msgid "Not a remote location: %1"
+msgstr ""
+
+#: src/core/remote.cpp:180
+msgid "ssh was not found; install OpenSSH to scan other computers."
+msgstr ""
+
+#: src/core/remote.cpp:190
+msgid "Could not connect to %1. Scanning over SSH needs key login without a password prompt; check that \"ssh %1\" works in a terminal."
+msgstr ""
+
+#: src/core/remote.cpp:197
+msgid "%1 does not exist on %2 or cannot be read."
+msgstr ""
+
+#: src/core/report.cpp:169
+msgid "Total: %1 (%2) · %3 files · %4 folders · scanned in %5 s"
+msgstr ""
+
+#: src/core/report.cpp:175
+msgid "Largest folders:"
+msgstr ""
+
+#: src/core/report.cpp:180
+msgid "Largest files:"
+msgstr ""
+
+#: src/core/report.cpp:184
+msgid "Extensions:"
+msgstr ""
+
+#: src/core/report.cpp:195
+msgid "files"
+msgstr ""
+
+#: src/core/report.cpp:195
+msgid "(no extension)"
+msgstr ""
+
+#: src/core/report.cpp:204
+msgid "Most crowded groups (threshold %1):"
+msgstr ""
+
+#: src/core/report.cpp:206
+msgid "(no groups)"
+msgstr ""
+
+#: src/core/report.cpp:224
+msgid "Usage: %1 [folder]"
+msgstr ""
+
+#: src/core/report.cpp:225
+msgid "%1 [options] <folder>   (no window when an output option is given)"
+msgstr ""
+
+#: src/core/report.cpp:226
+msgid "Output options (can be combined):"
+msgstr ""
+
+#: src/core/report.cpp:227
+msgid "text report: largest folders, files and extensions"
+msgstr ""
+
+#: src/core/report.cpp:228
+msgid "search, e.g. --find '*.iso >1G older:1y'"
+msgstr ""
+
+#: src/core/report.cpp:229
+msgid "list duplicate files (compares contents)"
+msgstr ""
+
+#: src/core/report.cpp:230
+msgid "caches, build output and other things that can be cleaned"
+msgstr ""
+
+#: src/core/report.cpp:231
+msgid "disk usage per owner"
+msgstr ""
+
+#: src/core/report.cpp:232
+msgid "files under /usr, /etc and /opt that no pacman package owns"
+msgstr ""
+
+#: src/core/report.cpp:233
+msgid "save the scan as a snapshot (ncdu JSON format)"
+msgstr ""
+
+#: src/core/report.cpp:234
+msgid "write every file and folder to a CSV file"
+msgstr ""
+
+#: src/core/report.cpp:235
+msgid "show what changed since an earlier snapshot"
+msgstr ""
+
+#: src/core/report.cpp:236
+msgid "HTML report with treemap and sunburst images"
+msgstr ""
+
+#: src/core/report.cpp:237
+msgid "treemap image (PNG)"
+msgstr ""
+
+#: src/core/report.cpp:238
+msgid "sunburst image (PNG)"
+msgstr ""
+
+#: src/core/report.cpp:239
+msgid "btrfs: data shared with snapshots, compressed data"
+msgstr ""
+
+#: src/core/report.cpp:240
+msgid "size history of the folder (see --history-record)"
+msgstr ""
+
+#: src/core/report.cpp:241
+msgid "installed pacman and Flatpak packages by size (no scan)"
+msgstr ""
+
+#: src/core/report.cpp:242
+msgid "scan the recorded folders and save their sizes (used by the weekly timer)"
+msgstr ""
+
+#: src/core/report.cpp:243
+msgid "Other options:"
+msgstr ""
+
+#: src/core/report.cpp:244
+msgid "read a snapshot (TuxDirStat or ncdu -o) instead of scanning"
+msgstr ""
+
+#: src/core/report.cpp:245
+msgid "rows per report list (default %1)"
+msgstr ""
+
+#: src/core/report.cpp:246
+msgid "image size for --png and --sunburst (default %1)"
+msgstr ""
+
+#: src/core/report.cpp:247
+msgid "use apparent size (default: size on disk)"
+msgstr ""
+
+#: src/core/report.cpp:248
+msgid "group similar items and list the most crowded groups"
+msgstr ""
+
+#: src/core/report.cpp:249
+msgid "minimum items per group (default %1)"
+msgstr ""
+
+#: src/core/report.cpp:250
+msgid "cross into other file systems"
+msgstr ""
+
+#: src/core/report.cpp:251
+msgid "interface language (en, tr, …)"
+msgstr ""
+
+#: src/core/report.cpp:252
+msgid "show this help"
+msgstr ""
+
+#: src/core/report.cpp:253
+msgid "show the version"
+msgstr ""
+
+#: src/core/report.cpp:306
+msgid "%1 needs a value"
+msgstr ""
+
+#: src/core/report.cpp:328
+msgid "invalid size: %1 (use e.g. 1600x1000)"
+msgstr ""
+
+#: src/core/report.cpp:350
+msgid "unknown option: %1"
+msgstr ""
+
+#: src/core/report.cpp:391
+msgid "give a folder to scan (or --import FILE)"
+msgstr ""
+
+#: src/core/report.cpp:459
+msgid "pacman was not found; --unowned works on Arch-based systems."
+msgstr ""
+
+#: src/core/session.cpp:100
+msgid "Waiting for administrator scan of %1…"
+msgstr ""
+
+#: src/core/session.cpp:122
+msgid "Authorization was refused or cancelled."
+msgstr ""
+
+#: src/core/session.cpp:124
+msgid "pkexec could not be started (is polkit installed?)"
+msgstr ""
+
+#: src/core/session.cpp:125
+msgid "The administrator scan failed (exit code %1)."
+msgstr ""
+
+#: src/core/session.cpp:127
+msgid "Loading administrator scan…"
+msgstr ""
+
+#: src/core/session.cpp:140
+msgid "Scanning %1 over SSH…"
+msgstr ""
+
+#: src/core/session.cpp:183
+msgid "Scanning… %1 items · %2 · %3"
+msgstr ""
+
+#: src/core/session.cpp:436
+msgid "Only local files can be deleted."
+msgstr ""
+
+#: src/core/session.cpp:91
+msgid "Loading %1…"
+msgstr ""
+
+#: src/core/sysinfo.cpp:150
+msgid "Installed packages"
+msgstr ""
+
+#: src/core/sysinfo.cpp:151
+msgid "Package"
+msgstr ""
+
+#: src/core/sysinfo.cpp:151
+msgid "Status"
+msgstr ""
+
+#: src/core/sysinfo.cpp:151
+msgid "Needed by"
+msgstr ""
+
+#: src/core/sysinfo.cpp:151
+msgid "Description"
+msgstr ""
+
+#: src/core/sysinfo.cpp:153
+msgid "No package manager was found (pacman or Flatpak)."
+msgstr ""
+
+#: src/core/sysinfo.cpp:157
+msgid "Reading the pacman database…"
+msgstr ""
+
+#: src/core/sysinfo.cpp:163
+msgid "Orphan (nothing needs it)"
+msgstr ""
+
+#: src/core/sysinfo.cpp:163
+msgid "Installed by you"
+msgstr ""
+
+#: src/core/sysinfo.cpp:163
+msgid "Dependency"
+msgstr ""
+
+#: src/core/sysinfo.cpp:179
+msgid "Asking Flatpak about installed apps…"
+msgstr ""
+
+#: src/core/sysinfo.cpp:201
+msgid "Flatpak app"
+msgstr ""
+
+#: src/core/sysinfo.cpp:201
+msgid "Flatpak runtime"
+msgstr ""
+
+#: src/core/sysinfo.cpp:212
+msgid "%1 pacman packages use %2."
+msgstr ""
+
+#: src/core/sysinfo.cpp:214
+msgid "%1 orphans (%2) can be removed with: sudo pacman -Rns $(pacman -Qdtq)"
+msgstr ""
+
+#: src/core/sysinfo.cpp:216
+msgid "%1 Flatpak apps and runtimes use %2."
+msgstr ""
+
+#: src/core/sysinfo.cpp:284
+msgid "Btrfs: shared and compressed data"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Folder"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Kind"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Size on disk"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Shared"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Exclusive"
+msgstr ""
+
+#: src/core/sysinfo.cpp:285
+msgid "Compressed"
+msgstr ""
+
+#: src/core/sysinfo.cpp:289
+msgid "This folder is not on a btrfs file system."
+msgstr ""
+
+#: src/core/sysinfo.cpp:292
+msgid "No files to analyze."
+msgstr ""
+
+#: src/core/sysinfo.cpp:302
+msgid "Looking for subvolumes…"
+msgstr ""
+
+#: src/core/sysinfo.cpp:324
+msgid "Snapshot"
+msgstr ""
+
+#: src/core/sysinfo.cpp:324
+msgid "Subvolume"
+msgstr ""
+
+#: src/core/sysinfo.cpp:379
+msgid "Reading the extents of %1 files…"
+msgstr ""
+
+#: src/core/sysinfo.cpp:404
+msgid "%1 of %2 is shared with snapshots or reflinked copies; deleting those files frees only the exclusive part (%3)."
+msgstr ""
+
+#: src/core/sysinfo.cpp:408
+msgid "%1 is stored compressed (size before compression)."
+msgstr ""
+
+#: src/core/sysinfo.cpp:410
+msgid "Files under %1 (%2 in total) were not analyzed."
+msgstr ""
+
+#: src/core/sysinfo.cpp:418
+msgid "For the compressed size on disk run: sudo compsize -x %1"
+msgstr ""
+
+#: src/core/sysinfo.cpp:419
+msgid "Install compsize to see the compressed size on disk."
+msgstr ""
+
+#: src/core/sysinfo.cpp:87
+msgid "pacman -Qi failed."
+msgstr ""
+
+#: src/core/tools.cpp:1079
+msgid "Files no package owns"
+msgstr ""
+
+#: src/core/tools.cpp:1093
+msgid "Scan / (or /usr, /etc, /opt) to look for files that no package owns."
+msgstr ""
+
+#: src/core/tools.cpp:1096
+msgid "Every scanned file under /usr, /etc and /opt belongs to a package."
+msgstr ""
+
+#: src/core/tools.cpp:1097
+msgid "Reading package file lists…"
+msgstr ""
+
+#: src/core/tools.cpp:1100
+msgid "pacman -Ql failed."
+msgstr ""
+
+#: src/core/tools.cpp:1116
+msgid "Comparing with the scanned files…"
+msgstr ""
+
+#: src/core/tools.cpp:1156
+msgid "%1 items · %2"
+msgstr ""
+
+#: src/core/tools.cpp:1157
+msgid "Leftovers of removed packages, manual installs and generated files. Check before deleting (as root)."
+msgstr ""
+
+#: src/core/tools.cpp:1494
+msgid "Could not decompress the file with %1."
+msgstr ""
+
+#: src/core/tools.cpp:1526
+msgid "This is an ncdu binary export. Export with ncdu -o (JSON) instead."
+msgstr ""
+
+#: src/core/tools.cpp:1532
+msgid "Not a valid ncdu / TuxDirStat snapshot (problem at byte %1)."
+msgstr ""
+
+#: src/core/tools.cpp:1638
+msgid "Changes since the snapshot"
+msgstr ""
+
+#: src/core/tools.cpp:1639
+msgid "Before"
+msgstr ""
+
+#: src/core/tools.cpp:1641
+msgid "Nothing changed."
+msgstr ""
+
+#: src/core/tools.cpp:1691
+msgid "new"
+msgstr ""
+
+#: src/core/tools.cpp:1692
+msgid "deleted"
+msgstr ""
+
+#: src/core/tools.cpp:1697
+msgid "Total: %1 → %2 (%3)"
+msgstr ""
+
+#: src/core/tools.cpp:1699
+msgid "snapshot from %1"
+msgstr ""
+
+#: src/core/tools.cpp:1701
+msgid "Note: the snapshot is of %1."
+msgstr ""
+
+#: src/core/tools.cpp:1707
+msgid "Loading the snapshot…"
+msgstr ""
+
+#: src/core/tools.cpp:1712
+msgid "Comparing…"
+msgstr ""
+
+#: src/core/tools.cpp:184
+msgid "You selected every copy of %1. Keep at least one of them."
+msgstr ""
+
+#: src/core/tools.cpp:271
+msgid "Words match file names (* and ? are wildcards). Filters:\n  >100M  <1G        size (K, M, G, T)\n  older:1y  newer:2w   last change (h, d, w, m, y)\n  type:f  type:d     files or folders only\n  ext:mp4,mkv        extensions\n  user:name          owner\n  path:Steam         text anywhere in the path\nExample: *.log >50M older:6m"
+msgstr ""
+
+#: src/core/tools.cpp:284
+msgid "Find files"
+msgstr ""
+
+#: src/core/tools.cpp:285
+msgid "Path"
+msgstr ""
+
+#: src/core/tools.cpp:285
+msgid "Modified"
+msgstr ""
+
+#: src/core/tools.cpp:287
+msgid "Nothing matches the search."
+msgstr ""
+
+#: src/core/tools.cpp:321
+msgid "Could not understand \"%1\"."
+msgstr ""
+
+#: src/core/tools.cpp:386
+msgid "Type something to search for."
+msgstr ""
+
+#: src/core/tools.cpp:441
+msgid "%1 matches"
+msgstr ""
+
+#: src/core/tools.cpp:443
+msgid "files total %1"
+msgstr ""
+
+#: src/core/tools.cpp:445
+msgid "showing the largest %1"
+msgstr ""
+
+#: src/core/tools.cpp:602
+msgid "Duplicate files"
+msgstr ""
+
+#: src/core/tools.cpp:606
+msgid "No duplicate files found."
+msgstr ""
+
+#: src/core/tools.cpp:608
+msgid "Collecting files…"
+msgstr ""
+
+#: src/core/tools.cpp:639
+msgid "Comparing contents: %1 of %2 files"
+msgstr ""
+
+#: src/core/tools.cpp:712
+msgid "%1 sets · %2 files · keeping one copy of each would free %3"
+msgstr ""
+
+#: src/core/tools.cpp:767
+msgid "Cleanup suggestions"
+msgstr ""
+
+#: src/core/tools.cpp:768
+msgid "What"
+msgstr ""
+
+#: src/core/tools.cpp:768
+msgid "Location"
+msgstr ""
+
+#: src/core/tools.cpp:768
+msgid "How"
+msgstr ""
+
+#: src/core/tools.cpp:770
+msgid "Nothing obvious to clean up."
+msgstr ""
+
+#: src/core/tools.cpp:784
+msgid "Move to trash"
+msgstr ""
+
+#: src/core/tools.cpp:803
+msgid "Looking through the scanned folders…"
+msgstr ""
+
+#: src/core/tools.cpp:814
+msgid "Unfinished download"
+msgstr ""
+
+#: src/core/tools.cpp:822
+msgid "Node.js packages (npm install brings them back)"
+msgstr ""
+
+#: src/core/tools.cpp:827
+msgid "Python bytecode cache"
+msgstr ""
+
+#: src/core/tools.cpp:831
+msgid "Python tool cache"
+msgstr ""
+
+#: src/core/tools.cpp:835
+msgid "Trash on this drive"
+msgstr ""
+
+#: src/core/tools.cpp:839
+msgid "Steam shader cache (rebuilt by Steam)"
+msgstr ""
+
+#: src/core/tools.cpp:845
+msgid "CMake build folder"
+msgstr ""
+
+#: src/core/tools.cpp:852
+msgid "Rust build output (cargo clean)"
+msgstr ""
+
+#: src/core/tools.cpp:860
+msgid "Application cache"
+msgstr ""
+
+#: src/core/tools.cpp:866
+msgid "npm cache"
+msgstr ""
+
+#: src/core/tools.cpp:870
+msgid "Trash"
+msgstr ""
+
+#: src/core/tools.cpp:877
+msgid "Checking package and system caches…"
+msgstr ""
+
+#: src/core/tools.cpp:879
+msgid "Pacman package cache"
+msgstr ""
+
+#: src/core/tools.cpp:886
+msgid "System journal"
+msgstr ""
+
+#: src/core/tools.cpp:890
+msgid "Crash dumps"
+msgstr ""
+
+#: src/core/tools.cpp:895
+msgid "Asking %1 about unused images…"
+msgstr ""
+
+#: src/core/tools.cpp:910
+msgid "Unused Docker data"
+msgstr ""
+
+#: src/core/tools.cpp:910
+msgid "Unused Podman data"
+msgstr ""
+
+#: src/core/tools.cpp:918
+msgid "Unused Flatpak runtimes"
+msgstr ""
+
+#: src/core/tools.cpp:927
+msgid "%1 suggestions · up to %2 could be freed"
+msgstr ""
+
+#: src/core/tools.cpp:928
+msgid "Review each one first. Rows with a command are run by you in a terminal."
+msgstr ""
+
+#: src/core/tools.cpp:936
+msgid "Disk usage by owner"
+msgstr ""
+
+#: src/core/tools.cpp:937
+msgid "Owner"
+msgstr ""
+
+#: src/core/tools.cpp:937
+msgid "Share"
+msgstr ""
+
+#: src/core/tools.cpp:939
+msgid "No files."
+msgstr ""
+
+#: src/core/tools.cpp:962
+msgid "%1 owners"
+msgstr ""
+
+#: src/core/tools.cpp:983
+msgid "pacman could not be run."
+msgstr ""
+
+#: src/core/tools.cpp:983
+msgid "pacman exited with code %1."
+msgstr ""
+
+#: src/core/tools.cpp:993
+msgid "%1\nis not owned by any package."
+msgstr ""
+
+#: src/core/tools.cpp:993
+msgid "%1\nbelongs to the package %2."
+msgstr ""
+
+#: src/gtk/main.cpp:1012
+msgid "The new language is used after TuxDirStat is restarted."
+msgstr ""
+
+#: src/gtk/main.cpp:1044
+msgid "The size of %1 is now recorded every week."
+msgstr ""
+
+#: src/gtk/main.cpp:1044
+msgid "Stopped recording %1."
+msgstr ""
+
+#: src/gtk/main.cpp:1310
+msgid "Open…"
+msgstr ""
+
+#: src/gtk/main.cpp:1311
+msgid "Rescan"
+msgstr ""
+
+#: src/gtk/main.cpp:1312
+msgid "Stop"
+msgstr ""
+
+#: src/gtk/main.cpp:1314
+msgid "Zoom in"
+msgstr ""
+
+#: src/gtk/main.cpp:1315
+msgid "Zoom out"
+msgstr ""
+
+#: src/gtk/main.cpp:1316
+msgid "Root"
+msgstr ""
+
+#: src/gtk/main.cpp:1318
+msgid "Apparent size"
+msgstr ""
+
+#: src/gtk/main.cpp:1319
+msgid "On: the apparent size of files (ls)\nOff: the space they take on disk (du)"
+msgstr ""
+
+#: src/gtk/main.cpp:1320
+msgid "One file system"
+msgstr ""
+
+#: src/gtk/main.cpp:1321
+msgid "Do not cross into other disks or mount points\n(btrfs subvolumes on the same device are included)"
+msgstr ""
+
+#: src/gtk/main.cpp:1322
+msgid "Group files"
+msgstr ""
+
+#: src/gtk/main.cpp:1323
+msgid "Collect many similar items in a folder (like game assets) into one box:\nfiles with the same extension, small files and small subfolders"
+msgstr ""
+
+#: src/gtk/main.cpp:1325
+msgid "Treemap"
+msgstr ""
+
+#: src/gtk/main.cpp:1326
+msgid "Sunburst"
+msgstr ""
+
+#: src/gtk/main.cpp:1327
+msgid "Show the map as rings around the folder instead of rectangles"
+msgstr ""
+
+#: src/gtk/main.cpp:1328
+msgid "Color by age"
+msgstr ""
+
+#: src/gtk/main.cpp:1329
+msgid "Color the treemap by when files last changed instead of by type"
+msgstr ""
+
+#: src/gtk/main.cpp:1331
+msgid "Find…"
+msgstr ""
+
+#: src/gtk/main.cpp:1331
+msgid "Find files…"
+msgstr ""
+
+#: src/gtk/main.cpp:1336
+msgid "Open snapshot…"
+msgstr ""
+
+#: src/gtk/main.cpp:1337
+msgid "Save snapshot…"
+msgstr ""
+
+#: src/gtk/main.cpp:1338
+msgid "Export HTML report…"
+msgstr ""
+
+#: src/gtk/main.cpp:1339
+msgid "Save map as image…"
+msgstr ""
+
+#: src/gtk/main.cpp:1340
+msgid "Export as CSV…"
+msgstr ""
+
+#: src/gtk/main.cpp:1345
+msgid "Duplicate files…"
+msgstr ""
+
+#: src/gtk/main.cpp:1346
+msgid "Cleanup suggestions…"
+msgstr ""
+
+#: src/gtk/main.cpp:1347
+msgid "Usage by owner"
+msgstr ""
+
+#: src/gtk/main.cpp:1348
+msgid "Files no package owns…"
+msgstr ""
+
+#: src/gtk/main.cpp:1349
+msgid "Installed packages…"
+msgstr ""
+
+#: src/gtk/main.cpp:1350
+msgid "Btrfs: shared and compressed data…"
+msgstr ""
+
+#: src/gtk/main.cpp:1351
+msgid "Compare with snapshot…"
+msgstr ""
+
+#: src/gtk/main.cpp:1352
+msgid "Size history…"
+msgstr ""
+
+#: src/gtk/main.cpp:1353
+msgid "Record size history weekly"
+msgstr ""
+
+#: src/gtk/main.cpp:1354
+msgid "Tools"
+msgstr ""
+
+#: src/gtk/main.cpp:1358
+msgid "At least %1 items"
+msgstr ""
+
+#: src/gtk/main.cpp:1364
+msgid "Grouping threshold"
+msgstr ""
+
+#: src/gtk/main.cpp:1366
+msgid "System"
+msgstr ""
+
+#: src/gtk/main.cpp:1366
+msgid "Light"
+msgstr ""
+
+#: src/gtk/main.cpp:1366
+msgid "Dark"
+msgstr ""
+
+#: src/gtk/main.cpp:1372
+msgid "Theme"
+msgstr ""
+
+#: src/gtk/main.cpp:1384
+msgid "Language"
+msgstr ""
+
+#: src/gtk/main.cpp:1387
+msgid "Reopen the last scan at start"
+msgstr ""
+
+#: src/gtk/main.cpp:1388
+msgid "About"
+msgstr ""
+
+#: src/gtk/main.cpp:1397
+msgid "Menu"
+msgstr ""
+
+#: src/gtk/main.cpp:1794
+msgid "Location to scan"
+msgstr ""
+
+#: src/gtk/main.cpp:1804
+msgid "Choose what to scan:"
+msgstr ""
+
+#: src/gtk/main.cpp:1813
+msgid "Home folder  (%1)"
+msgstr ""
+
+#: src/gtk/main.cpp:1834
+msgid "Used"
+msgstr ""
+
+#: src/gtk/main.cpp:1834
+msgid "Free"
+msgstr ""
+
+#: src/gtk/main.cpp:1834
+msgid "Total"
+msgstr ""
+
+#: src/gtk/main.cpp:1844
+msgid "Usage"
+msgstr ""
+
+#: src/gtk/main.cpp:1858
+msgid "Other computer (SSH):"
+msgstr ""
+
+#: src/gtk/main.cpp:1860
+msgid "host:/path, e.g. pi:/home"
+msgstr ""
+
+#: src/gtk/main.cpp:1861
+msgid "Scans a folder on another computer over SSH. Needs key login without a password prompt."
+msgstr ""
+
+#: src/gtk/main.cpp:1864
+msgid "Scan as administrator (read-only, asks for your password)"
+msgstr ""
+
+#: src/gtk/main.cpp:1865
+msgid "Reads folders your user cannot open, such as /root or /var/lib. Deleting still uses your own rights."
+msgstr ""
+
+#: src/gtk/main.cpp:1885
+msgid "Write the remote location as host:/path, e.g. pi:/home"
+msgstr ""
+
+#: src/gtk/main.cpp:1917
+msgid "Choose folder…"
+msgstr ""
+
+#: src/gtk/main.cpp:1920
+msgid "Scan"
+msgstr ""
+
+#: src/gtk/main.cpp:2012
+msgid "The scan failed:"
+msgstr ""
+
+#: src/gtk/main.cpp:2017
+msgid "Scan stopped."
+msgstr ""
+
+#: src/gtk/main.cpp:2069
+msgid "Done: %1 items in %2 s."
+msgstr ""
+
+#: src/gtk/main.cpp:2074
+msgid "Showing the saved scan from %1. Press F5 to scan again."
+msgstr ""
+
+#: src/gtk/main.cpp:2179
+msgid "Total: %1 · %2 files · %3 folders · Free: %4"
+msgstr ""
+
+#: src/gtk/main.cpp:2191
+msgid "Last change:"
+msgstr ""
+
+#: src/gtk/main.cpp:2315
+msgid "Show in file manager"
+msgstr ""
+
+#: src/gtk/main.cpp:2317
+msgid "Copy path"
+msgstr ""
+
+#: src/gtk/main.cpp:2319
+msgid "Which package owns this?"
+msgstr ""
+
+#: src/gtk/main.cpp:2323
+msgid "Zoom into in treemap"
+msgstr ""
+
+#: src/gtk/main.cpp:2325
+msgid "Rescan its folder"
+msgstr ""
+
+#: src/gtk/main.cpp:2326
+msgid "Scan this file system too"
+msgstr ""
+
+#: src/gtk/main.cpp:2327
+msgid "Rescan this folder"
+msgstr ""
+
+#: src/gtk/main.cpp:2335
+msgid "Delete permanently…"
+msgstr ""
+
+#: src/gtk/main.cpp:2405
+msgid "This scan is from another computer or a snapshot of one; its files cannot be deleted from here."
+msgstr ""
+
+#: src/gtk/main.cpp:2409
+msgid "the %1 files in this group"
+msgstr ""
+
+#: src/gtk/main.cpp:2410
+msgid "this folder"
+msgstr ""
+
+#: src/gtk/main.cpp:2411
+msgid "this file"
+msgstr ""
+
+#: src/gtk/main.cpp:2413
+msgid "Delete %1 permanently?"
+msgstr ""
+
+#: src/gtk/main.cpp:2413
+msgid "Move %1 to the trash?"
+msgstr ""
+
+#: src/gtk/main.cpp:2414
+msgid "This cannot be undone."
+msgstr ""
+
+#: src/gtk/main.cpp:2415
+msgid "Delete permanently"
+msgstr ""
+
+#: src/gtk/main.cpp:2421
+msgid "Could not delete (or only partly deleted):"
+msgstr ""
+
+#: src/gtk/main.cpp:2502
+msgid "Wait until the scan has finished."
+msgstr ""
+
+#: src/gtk/main.cpp:2506
+msgid "Scan a folder first."
+msgstr ""
+
+#: src/gtk/main.cpp:2556
+msgid "Copy command"
+msgstr ""
+
+#: src/gtk/main.cpp:2645
+msgid "Set %1 · %2 × %3"
+msgstr ""
+
+#: src/gtk/main.cpp:2712
+msgid "Show in tree"
+msgstr ""
+
+#: src/gtk/main.cpp:2713
+msgid "Open folder"
+msgstr ""
+
+#: src/gtk/main.cpp:2745
+msgid "Move %1 items (%2) to the trash?"
+msgstr ""
+
+#: src/gtk/main.cpp:2776
+msgid "%1 items could not be moved to the trash."
+msgstr ""
+
+#: src/gtk/main.cpp:2784
+msgid "Close"
+msgstr ""
+
+#: src/gtk/main.cpp:2872
+msgid "Find"
+msgstr ""
+
+#: src/gtk/main.cpp:2908
+msgid "Open snapshot"
+msgstr ""
+
+#: src/gtk/main.cpp:2925
+msgid "Save snapshot"
+msgstr ""
+
+#: src/gtk/main.cpp:2933
+msgid "Could not save the snapshot:"
+msgstr ""
+
+#: src/gtk/main.cpp:2935
+msgid "Snapshot saved: %1"
+msgstr ""
+
+#: src/gtk/main.cpp:2943
+msgid "Export as CSV"
+msgstr ""
+
+#: src/gtk/main.cpp:2943
+msgid "CSV files"
+msgstr ""
+
+#: src/gtk/main.cpp:2949
+msgid "Could not write the file:"
+msgstr ""
+
+#: src/gtk/main.cpp:2951
+msgid "Exported: %1"
+msgstr ""
+
+#: src/gtk/main.cpp:2961
+msgid "Export HTML report"
+msgstr ""
+
+#: src/gtk/main.cpp:2961
+msgid "HTML files"
+msgstr ""
+
+#: src/gtk/main.cpp:2977
+msgid "Save map as image"
+msgstr ""
+
+#: src/gtk/main.cpp:2977
+msgid "PNG images"
+msgstr ""
+
+#: src/gtk/main.cpp:2996
+msgid "Compare with snapshot"
+msgstr ""
+
+#: src/gtk/main.cpp:34
+msgid "Subtree"
+msgstr ""
+
+#: src/gtk/main.cpp:34
+msgid "Items"
+msgstr ""
+
+#: src/gtk/main.cpp:355
+msgid "Cancel"
+msgstr ""
+
+#: src/gtk/main.cpp:407
+msgid "Choose folder"
+msgstr ""
+
+#: src/gtk/main.cpp:428
+msgid "Choose"
+msgstr ""
+
+#: src/gtk/main.cpp:503
+msgid "All files"
+msgstr ""
+
+#: src/gtk/main.cpp:542
+msgid "Save"
+msgstr ""
+
+#: src/gtk/main.cpp:542
+msgid "Open"
+msgstr ""
+
+#: src/gtk/main.cpp:566
+msgid "Snapshots (JSON)"
+msgstr ""
+
+#: src/gtk/main.cpp:958
+msgid "Disk usage analyzer for Linux."
+msgstr ""
+
+#: src/gtk/main.cpp:959
+msgid "Click an item in the tree or the treemap. Double-click in the treemap to zoom into a folder, Backspace goes back. Selecting a row in the extension list marks those files in the treemap."
+msgstr ""
+
+#: src/gtk/main.cpp:962
+msgid "License: GPL-3.0-or-later"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:1097
+msgid "Delete %1 <b>permanently</b>?"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:1238
+msgid "CSV files (*.csv);;All files (*)"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:1270
+msgid "Saving the scan for next time…"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:1287
+msgid "HTML files (*.html);;All files (*)"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:1305
+msgid "PNG images (*.png);;All files (*)"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:441
+msgid "Quit"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:463
+msgid "Arch Linux: files under /usr, /etc and /opt that no pacman package owns"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:473
+msgid "pacman and Flatpak packages by size, with orphans"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:479
+msgid "How much is shared with snapshots or reflinks (and frees nothing when deleted), and how much is compressed"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:492
+msgid "Saves the size of this folder every week (systemd user timer) for the size history"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:516
+msgid "&File"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:518
+msgid "&Edit"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:519
+msgid "&View"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:552
+msgid "&Tools"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:567
+msgid "&Help"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:569
+msgid "About TuxDirStat"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:738
+msgid "Nothing scanned yet"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:739
+msgid "Open… (Ctrl+O) to choose a location"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:747
+msgid "%1 · %2 files · %3 folders · %4"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:753
+msgid "Disk: %1 free of %2 (%3 used)"
+msgstr ""
+
+#: src/qt/mainwindow.cpp:85
+msgid "Snapshots (*.json *.json.gz *.json.zst *.json.xz);;All files (*)"
+msgstr ""
+
+#: src/qt/resultdialog.cpp:159
+msgid "Copy"
+msgstr ""
+
+#: src/qt/treemap.cpp:94
+msgid "The treemap will appear here"
+msgstr ""
+
+#: src/tk/main.cpp:113
+msgid "View"
+msgstr ""
+
+#: src/tk/main.cpp:121
+msgid "At least %s items"
+msgstr ""
+
+#: src/tk/main.cpp:91
+msgid "File"
+msgstr ""
+
+#: src/tui/main.cpp:298
+msgid "Deleted: %1 (%2)"
+msgstr ""
+
+#: src/tui/main.cpp:323
+msgid "Find (e.g. *.iso >1G older:1y):"
+msgstr ""
+
+#: src/tui/main.cpp:350
+msgid "Total: %1 · %2 files · %3 folders"
+msgstr ""
+
+#: src/tui/main.cpp:354
+msgid "%1 free"
+msgstr ""
+
+#: src/tui/main.cpp:365
+msgid "Press Esc or q to stop."
+msgstr ""
+
+#: src/tui/main.cpp:378
+msgid "↑↓ move  →/Enter open  ← back  s/n/c/m sort  d trash  D delete  / find  t types  i info  ? help  q quit"
+msgstr ""
+
+#: src/tui/main.cpp:379
+msgid "↑↓ move  Enter show in tree  Esc back  q quit"
+msgstr ""
+
+#: src/tui/main.cpp:415
+msgid "(empty folder)"
+msgstr ""
+
+#: src/tui/main.cpp:494
+msgid "Nothing found."
+msgstr ""
+
+#: src/tui/main.cpp:518
+msgid "move"
+msgstr ""
+
+#: src/tui/main.cpp:519
+msgid "open the folder"
+msgstr ""
+
+#: src/tui/main.cpp:520
+msgid "back to the parent folder"
+msgstr ""
+
+#: src/tui/main.cpp:521
+msgid "sort by size / name / items / date (again: reverse)"
+msgstr ""
+
+#: src/tui/main.cpp:522
+msgid "apparent size or size on disk"
+msgstr ""
+
+#: src/tui/main.cpp:523
+msgid "group similar items"
+msgstr ""
+
+#: src/tui/main.cpp:524
+msgid "move to trash"
+msgstr ""
+
+#: src/tui/main.cpp:525
+msgid "delete permanently"
+msgstr ""
+
+#: src/tui/main.cpp:526
+msgid "rescan this folder / everything"
+msgstr ""
+
+#: src/tui/main.cpp:527
+msgid "find files (same syntax as the windowed versions)"
+msgstr ""
+
+#: src/tui/main.cpp:528
+msgid "file types"
+msgstr ""
+
+#: src/tui/main.cpp:529
+msgid "information about the selected item"
+msgstr ""
+
+#: src/tui/main.cpp:530
+msgid "quit"
+msgstr ""
+
+#: src/tui/main.cpp:533
+msgid "Keys"
+msgstr ""

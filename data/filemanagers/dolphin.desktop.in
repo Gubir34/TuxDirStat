@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Service
+MimeType=inode/directory;
+Actions=tuxdirstat
+X-KDE-Priority=TopLevel
+
+[Desktop Action tuxdirstat]
+Name=Analyze disk usage with TuxDirStat
+Name[tr]=TuxDirStat ile disk kullanımını incele
+Icon=tuxdirstat
+Exec=@FM_EXEC@ %f

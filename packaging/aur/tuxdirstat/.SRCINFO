@@ -1,6 +1,6 @@
 pkgbase = tuxdirstat
-	pkgdesc = Fast disk usage analyzer: tree, treemap, duplicates, cleanup suggestions and snapshots (Qt, GTK 3/4 and Tk)
-	pkgver = 1.4
+	pkgdesc = Fast disk usage analyzer: treemap and sunburst, duplicates, cleanup, snapshots, SSH scans (Qt, GTK, Tk, terminal)
+	pkgver = 1.5
 	pkgrel = 1
 	url = https://github.com/Gubir34/TuxDirStat
 	arch = x86_64
@@ -15,12 +15,17 @@ pkgbase = tuxdirstat
 	depends = gtk4
 	depends = tk
 	depends = glib2
+	depends = ncurses
+	depends = zlib
 	depends = gcc-libs
 	depends = glibc
 	optdepends = polkit: scan as administrator (pkexec)
 	optdepends = pacman-contrib: paccache command in cleanup suggestions
 	optdepends = zstd: open .json.zst snapshots
-	source = tuxdirstat::git+https://github.com/Gubir34/TuxDirStat.git#tag=v1.4
+	optdepends = openssh: scan other computers over SSH
+	optdepends = compsize: compressed size on disk in the btrfs view (as root)
+	optdepends = python-nautilus: "Analyze disk usage" in the Nautilus menu
+	source = tuxdirstat::git+https://github.com/Gubir34/TuxDirStat.git#tag=v1.5
 	sha256sums = SKIP
 
 pkgname = tuxdirstat

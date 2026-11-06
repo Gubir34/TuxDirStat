@@ -24,7 +24,10 @@
       <li>Searches by name, size, age, type and owner</li>
       <li>Colors the treemap by file age, shows usage per owner and exports CSV</li>
       <li>On Arch Linux, shows which package owns a file and lists files no package owns</li>
-      <li>Qt, GTK 3, GTK 4 and Tk interfaces, light and dark themes, English and Turkish</li>
+      <li>Sunburst view, HTML reports and PNG images of the map</li>
+      <li>Scans other computers over SSH and records how folders grow week by week</li>
+      <li>On btrfs, shows how much data is shared with snapshots or stored compressed</li>
+      <li>Qt, GTK 3, GTK 4, Tk and terminal interfaces, light and dark themes, English and Turkish</li>
     </ul>
     <p xml:lang="tr">
       TuxDirStat, WinDirStat tarzında hızlı bir disk kullanım analizörüdür. Boyuta göre sıralı klasör ağacını,
@@ -52,6 +55,13 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.5" date="2026-11-06">
+      <description>
+        <p>Sunburst view, scans over SSH, weekly size history, HTML reports and map images, installed
+        packages and btrfs sharing views, a terminal interface, file manager menus, and translations
+        in gettext .po files.</p>
+      </description>
+    </release>
     <release version="1.4" date="2026-11-06">
       <description>
         <p>English interface (Turkish stays available), duplicate finder, cleanup suggestions, snapshots and

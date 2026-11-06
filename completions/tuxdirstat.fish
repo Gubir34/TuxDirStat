@@ -1,5 +1,5 @@
 # fish completion for TuxDirStat (installed under every program name)
-for cmd in tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
+for cmd in tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk tuxdirstat-tui
     complete -c $cmd -l report -d 'Text report of the largest folders, files and extensions'
     complete -c $cmd -l find -x -d 'Search the scan, e.g. "*.iso >1G older:1y"'
     complete -c $cmd -l duplicates -d 'List duplicate files'
@@ -9,6 +9,14 @@ for cmd in tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
     complete -c $cmd -l export -r -F -d 'Save the scan as a snapshot'
     complete -c $cmd -l csv -r -F -d 'Write every entry to a CSV file'
     complete -c $cmd -l compare -r -F -d 'Compare with an earlier snapshot'
+    complete -c $cmd -l html -r -F -d 'HTML report with treemap and sunburst images'
+    complete -c $cmd -l png -r -F -d 'Treemap image (PNG)'
+    complete -c $cmd -l sunburst -r -F -d 'Sunburst image (PNG)'
+    complete -c $cmd -l btrfs -d 'Data shared with snapshots, compressed data'
+    complete -c $cmd -l history -d 'Size history of the folder'
+    complete -c $cmd -l packages -d 'Installed packages by size'
+    complete -c $cmd -l history-record -d 'Record the sizes of the recorded folders'
+    complete -c $cmd -l size -x -d 'Image size, e.g. 1600x1000'
     complete -c $cmd -l import -r -F -d 'Read a snapshot instead of scanning'
     complete -c $cmd -l top -x -d 'Rows per report list'
     complete -c $cmd -l apparent -d 'Use apparent size'

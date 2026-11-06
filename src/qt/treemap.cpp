@@ -44,6 +44,12 @@ void Treemap::setColorMode(ColorMode m)
     schedule();
 }
 
+void Treemap::setShape(MapShape s)
+{
+    renderer_.setShape(s);
+    schedule();
+}
+
 void Treemap::setHighlight(int ext)
 {
     highlight_ = ext;

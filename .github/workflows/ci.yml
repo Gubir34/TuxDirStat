@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm --needed base-devel cmake ninja git python \
-            qt6-base gtk3 gtk4 tk glib2 appstream desktop-file-utils
+            qt6-base gtk3 gtk4 tk glib2 zlib ncurses appstream desktop-file-utils gettext
       - uses: actions/checkout@v4
       - name: Configure
         run: |
@@ -36,7 +36,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
             -DTUXDIRSTAT_QT=ON -DTUXDIRSTAT_GTK3=ON -DTUXDIRSTAT_GTK4=ON -DTUXDIRSTAT_TK=ON \
-            -DTUXDIRSTAT_TESTS=ON
+            -DTUXDIRSTAT_TUI=ON -DTUXDIRSTAT_TESTS=ON
       - name: Build
         run: cmake --build build
       - name: Test
@@ -46,6 +46,11 @@ jobs:
           ./build/tuxdirstat --version
           ./build/tuxdirstat --report --top 5 --duplicates --cleanup --owners --export /tmp/s.json /usr/include
           ./build/tuxdirstat --lang tr --import /tmp/s.json --compare /tmp/s.json --find '>1K type:f'
+          ./build/tuxdirstat --html /tmp/r.html --png /tmp/t.png --sunburst /tmp/s.png --size 800x500 --export /tmp/s.json.gz /usr/include
+          ./build/tuxdirstat --import /tmp/s.json.gz --report --top 3
+          ./build/tuxdirstat --packages | head -5
+          ./build/tuxdirstat-tui --version
+          for f in po/*.po; do msgfmt --check -o /dev/null "$f"; done
       - name: Install and validate metadata
         run: |
           DESTDIR=/tmp/pkg cmake --install build --prefix /usr

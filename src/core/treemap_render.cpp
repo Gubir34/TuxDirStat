@@ -156,8 +156,180 @@ void TreemapRenderer::render(Node *root, int width, int height, bool apparent, c
     w_ = width;
     h_ = height;
     root_ = root;
+    if (shape_ == MapShape::Rings) {
+        layoutRings(root, apparent, colors);
+        paintRings();
+        return;
+    }
     layout(root, apparent, colors);
     paint();
+}
+
+// ───────────── rings (sunburst) ─────────────
+// Leaf fields in ring mode: s0/s1 = start/end angle (radians, clockwise from the top),
+// s2 = level (0 = center disc). x0…y1 are unused.
+
+void TreemapRenderer::layoutRings(Node *root, bool ap, const std::vector<RGBf> &colors)
+{
+    const int64_t now = std::time(nullptr);
+    const bool byAge = mode_ == ColorMode::Age;
+    const double R = std::min(w_, h_) / 2.0 - 3;
+    if (R < 8)
+        return;
+    // Rings share the radius by the depth actually drawn, so shallow trees fill the area too.
+    int depth = 1;
+    {
+        std::vector<std::pair<const Node *, int>> dst{{root, 0}};
+        while (!dst.empty() && depth < RING_LEVELS) {
+            auto [n, l] = dst.back();
+            dst.pop_back();
+            for (const Node *c : n->children) {
+                depth = std::max(depth, l + 1);
+                if (c->isDir && !(c->flags & F_GROUP) && l + 1 < RING_LEVELS)
+                    dst.push_back({c, l + 1});
+            }
+        }
+    }
+    r0_ = R * (depth <= 3 ? 0.24 : 0.17);
+    ringW_ = (R - r0_) / depth;
+    auto colorFor = [&colors](uint32_t ext) { return ext < colors.size() ? colors[ext] : dirColor(); };
+    auto dirTint = [](RGBf c) {  // folders: the dominant color, softened toward gray
+        const float g = 255 * PALETTE_BRIGHTNESS * 0.9f;
+        return RGBf{c.r * 0.6f + g * 0.4f, c.g * 0.6f + g * 0.4f, c.b * 0.6f + g * 0.4f};
+    };
+    auto colorOf = [&](const Node *n) -> RGBf {
+        if (byAge)
+            return ageColor(n->mtime, now);
+        if (!n->isDir || (n->flags & F_GROUP))
+            return colorFor(n->ext);
+        const int e = dominantExt(n, ap);
+        return e >= 0 ? dirTint(colorFor(uint32_t(e))) : dirColor();
+    };
+    struct Item {
+        Node *n;
+        double a0, a1;
+        int level;
+    };
+    std::vector<Item> st{{root, 0, 2 * M_PI, 0}};
+    std::vector<Node *> kids;
+    while (!st.empty()) {
+        const Item it = st.back();
+        st.pop_back();
+        Leaf leaf{0, 0, 0, 0, it.a0, it.a1, double(it.level), 0, it.level == 0 ? dirColor() : colorOf(it.n), it.n};
+        leaves_.push_back(leaf);
+        if (!it.n->isDir || ((it.n->flags & F_GROUP) && it.n != root) || r0_ + (it.level + 1) * ringW_ > R + 0.5)
+            continue;
+        const double outer = r0_ + (it.level + 1) * ringW_;
+        kids.clear();
+        for (Node *c : it.n->children)
+            if (c->sizeOf(ap) > 0)
+                kids.push_back(c);
+        std::sort(kids.begin(), kids.end(), [ap](const Node *a, const Node *b) { return a->sizeOf(ap) > b->sizeOf(ap); });
+        const double total = double(it.n->sizeOf(ap));
+        double a = it.a0;
+        for (Node *c : kids) {
+            const double span = (it.a1 - it.a0) * double(c->sizeOf(ap)) / total;
+            if (span * outer < 1.2)  // thinner than a pixel: the rest is smaller still
+                break;
+            st.push_back({c, a, a + span, it.level + 1});
+            a += span;
+        }
+    }
+}
+
+void TreemapRenderer::paintRings()
+{
+    const int W = w_, H = h_;
+    idx_.assign(size_t(W) * H, -1);
+    pixels_.assign(size_t(W) * H, BG);
+    if (leaves_.empty())
+        return;
+    // Per level: segments sorted by start angle for binary search.
+    std::vector<std::vector<std::pair<double, int32_t>>> levels(RING_LEVELS + 1);
+    for (size_t i = 0; i < leaves_.size(); ++i)
+        levels[size_t(leaves_[i].s2)].push_back({leaves_[i].s0, int32_t(i)});
+    for (auto &l : levels)
+        std::sort(l.begin(), l.end());
+    const double cx = W / 2.0, cy = H / 2.0;
+    const double k = BRIGHTNESS / PALETTE_BRIGHTNESS;
+    auto work = [&](int ya, int yb) {
+        for (int y = ya; y < yb; ++y) {
+            for (int x = 0; x < W; ++x) {
+                const double dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+                const double r = std::sqrt(dx * dx + dy * dy);
+                int level;
+                double radial;
+                if (r < r0_) {
+                    level = 0;
+                    radial = 1 - r / r0_;
+                } else {
+                    level = 1 + int((r - r0_) / ringW_);
+                    if (level > RING_LEVELS)
+                        continue;
+                    radial = std::sin(M_PI * std::fmod(r - r0_, ringW_) / ringW_);
+                }
+                double ang = std::atan2(dx, -dy);
+                if (ang < 0)
+                    ang += 2 * M_PI;
+                const auto &segs = levels[size_t(level)];
+                auto p = std::upper_bound(segs.begin(), segs.end(), std::pair{ang, INT32_MAX});
+                if (p == segs.begin())
+                    continue;
+                --p;
+                const Leaf &l = leaves_[size_t(p->second)];
+                if (ang >= l.s1)
+                    continue;
+                idx_[size_t(y) * W + x] = p->second;
+                const double along = level ? std::sin(M_PI * (ang - l.s0) / std::max(l.s1 - l.s0, 1e-9)) : 1.0;
+                const double pix = (IA + IS * (0.55 + 0.30 * radial + 0.15 * along)) * k;
+                pixels_[size_t(y) * W + x] = rgb(clamp255(l.color.r * pix), clamp255(l.color.g * pix), clamp255(l.color.b * pix));
+            }
+        }
+    };
+    const int nt = std::clamp(int(std::thread::hardware_concurrency()), 1, 16);
+    std::vector<std::thread> ts;
+    const int chunk = (H + nt - 1) / nt;
+    for (int t = 0; t < nt; ++t) {
+        int ya = t * chunk, yb = std::min(H, ya + chunk);
+        if (ya < yb)
+            ts.emplace_back(work, ya, yb);
+    }
+    for (auto &t : ts)
+        t.join();
+    // Thin dark seams between neighboring segments.
+    for (int y = 1; y < H; ++y)
+        for (int x = 1; x < W; ++x) {
+            const size_t i = size_t(y) * W + x;
+            const int32_t v = idx_[i];
+            if (v >= 0 && (idx_[i - 1] != v || idx_[i - W] != v)) {
+                const uint32_t c = pixels_[i];
+                pixels_[i] = rgb(int((c >> 16 & 255) * 0.55), int((c >> 8 & 255) * 0.55), int((c & 255) * 0.55));
+            }
+        }
+}
+
+// Draws the border of the pixel region whose leaves are marked in `in`: white inside,
+// and with `contrast` also black just outside so it reads on every color.
+void TreemapRenderer::outline(std::vector<uint32_t> &out, const std::vector<char> &in, bool contrast) const
+{
+    const int W = w_, H = h_;
+    auto inside = [&](int x, int y) {
+        if (x < 0 || y < 0 || x >= W || y >= H)
+            return false;
+        const int32_t i = idx_[size_t(y) * W + x];
+        return i >= 0 && in[size_t(i)];
+    };
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+            const bool me = inside(x, y);
+            const bool edge = inside(x - 1, y) != me || inside(x + 1, y) != me || inside(x, y - 1) != me || inside(x, y + 1) != me;
+            if (!edge)
+                continue;
+            if (me)
+                out[size_t(y) * W + x] = WHITE;
+            else if (contrast)
+                out[size_t(y) * W + x] = BLACK;
+        }
 }
 
 void TreemapRenderer::layout(Node *root, bool ap, const std::vector<RGBf> &colors)
@@ -302,6 +474,31 @@ void TreemapRenderer::compose(std::vector<uint32_t> &out, int highlightExt, cons
     if (out.empty())
         return;
     const int W = w_, H = h_;
+    if (shape_ == MapShape::Rings) {
+        if (highlightExt >= 0) {
+            std::vector<char> in(leaves_.size());
+            for (size_t i = 0; i < leaves_.size(); ++i) {
+                const Node *n = leaves_[i].node;
+                in[i] = (!n->isDir || (n->flags & F_GROUP)) && int(n->ext) == highlightExt;
+            }
+            outline(out, in, false);
+        }
+        if (selected && selected != root_) {
+            std::vector<char> in(leaves_.size());
+            bool any = false;
+            for (size_t i = 0; i < leaves_.size(); ++i)
+                any |= (in[i] = leaves_[i].node == selected || leaves_[i].node->isWithin(selected));
+            if (!any)  // not drawn (too small or too deep): mark its nearest drawn ancestor
+                for (const Node *a = selected->parent; a && !any; a = a->parent)
+                    for (size_t i = 0; i < leaves_.size(); ++i)
+                        if (leaves_[i].node == a && a != root_) {
+                            in[i] = 1;
+                            any = true;
+                        }
+            outline(out, in, true);
+        }
+        return;
+    }
     if (highlightExt >= 0) {
         for (const Leaf &l : leaves_) {
             // Dosyalar ve aynı uzantıdaki grup blokları işaretlenir.

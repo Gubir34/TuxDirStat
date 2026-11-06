@@ -1,0 +1,10 @@
+[Nemo Action]
+Name=Analyze disk usage with TuxDirStat
+Name[tr]=TuxDirStat ile disk kullanımını incele
+Comment=Show what takes up space in this folder
+Comment[tr]=Bu klasörde neyin yer kapladığını gösterir
+Exec=@FM_EXEC@ %F
+Icon-Name=tuxdirstat
+Selection=s
+Extensions=dir;
+Dependencies=@FM_EXEC@;

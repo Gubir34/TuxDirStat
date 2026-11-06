@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(TuxDirStat VERSION 1.4 LANGUAGES CXX)
+project(TuxDirStat VERSION 1.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,12 +12,25 @@ option(TUXDIRSTAT_QT   "Qt 6 arayüzü (tuxdirstat)"        ON)
 option(TUXDIRSTAT_GTK3 "GTK 3 arayüzü (tuxdirstat-gtk3)"  OFF)
 option(TUXDIRSTAT_GTK4 "GTK 4 arayüzü (tuxdirstat-gtk4)"  OFF)
 option(TUXDIRSTAT_TK   "Tk arayüzü (tuxdirstat-tk)"       OFF)
+option(TUXDIRSTAT_TUI  "Terminal interface (tuxdirstat-tui, ncurses)" ON)
 option(TUXDIRSTAT_TESTS "Çekirdek birim testleri (ctest)" OFF)
 
 find_package(Threads REQUIRED)
 find_package(PkgConfig)
 include(GNUInstallDirs)
 set(TUXDIRSTAT_PROGRAMS "")
+
+# Translations: po/*.po are compiled into a table included by i18n.cpp.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB TUXDIRSTAT_PO CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/po/*.po)
+set(TUXDIRSTAT_CATALOG ${CMAKE_BINARY_DIR}/generated/i18n_catalog.inc)
+add_custom_command(
+  OUTPUT ${TUXDIRSTAT_CATALOG}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
+  COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/po/po2inc.py ${TUXDIRSTAT_CATALOG} ${TUXDIRSTAT_PO}
+  DEPENDS ${TUXDIRSTAT_PO} ${CMAKE_SOURCE_DIR}/po/po2inc.py ${CMAKE_SOURCE_DIR}/po/pofile.py
+  COMMENT "Compiling translations"
+  VERBATIM)
 
 add_library(tuxdirstat_core STATIC
   src/core/core.cpp
@@ -27,12 +40,18 @@ add_library(tuxdirstat_core STATIC
   src/core/extinfo.cpp
   src/core/tools.cpp
   src/core/i18n.cpp
+  src/core/export.cpp
+  src/core/sysinfo.cpp
+  src/core/remote.cpp
+  src/core/history.cpp
+  ${TUXDIRSTAT_CATALOG}
 )
-target_include_directories(tuxdirstat_core PUBLIC src/core)
+target_include_directories(tuxdirstat_core PUBLIC src/core PRIVATE ${CMAKE_BINARY_DIR}/generated)
 target_compile_options(tuxdirstat_core PRIVATE -Wall -Wextra)
 target_compile_definitions(tuxdirstat_core PUBLIC TUXDIRSTAT_VERSION="${PROJECT_VERSION}"
                                                   TUXDIRSTAT_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}")
-target_link_libraries(tuxdirstat_core PUBLIC Threads::Threads)
+find_package(ZLIB REQUIRED)
+target_link_libraries(tuxdirstat_core PUBLIC Threads::Threads ZLIB::ZLIB)
 
 function(tuxdirstat_desktop target name categories)
   set(DT_NAME "${name}")
@@ -85,16 +104,22 @@ if(TUXDIRSTAT_TK)
   tuxdirstat_desktop(tuxdirstat-tk "TuxDirStat (Tk)" "System;Filesystem;")
 endif()
 
+if(TUXDIRSTAT_TUI)
+  pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncursesw)
+  add_executable(tuxdirstat-tui src/tui/main.cpp)
+  target_compile_options(tuxdirstat-tui PRIVATE -Wall -Wextra)
+  target_link_libraries(tuxdirstat-tui PRIVATE tuxdirstat_core PkgConfig::NCURSES)
+  install(TARGETS tuxdirstat-tui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  list(APPEND TUXDIRSTAT_PROGRAMS tuxdirstat-tui)
+endif()
+
 if(TUXDIRSTAT_TESTS)
   enable_testing()
   add_executable(tuxdirstat_core_test tests/core_test.cpp)
   target_compile_options(tuxdirstat_core_test PRIVATE -Wall -Wextra)
   target_link_libraries(tuxdirstat_core_test PRIVATE tuxdirstat_core)
   add_test(NAME core COMMAND tuxdirstat_core_test)
-  find_package(Python3 COMPONENTS Interpreter)
-  if(Python3_Interpreter_FOUND)
-    add_test(NAME translations COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/check_i18n.py)
-  endif()
+  add_test(NAME translations COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tests/check_i18n.py)
 endif()
 
 # Simge, AppStream bilgisi, kılavuz sayfası ve kabuk tamamlamaları
@@ -106,6 +131,24 @@ if(TUXDIRSTAT_QT)
   install(FILES data/io.github.gubir34.TuxDirStat.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
 endif()
 install(FILES data/tuxdirstat.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+
+# File manager menus ("Analyze disk usage with TuxDirStat") start the first windowed interface.
+option(TUXDIRSTAT_FILEMANAGERS "Dolphin, Nautilus and Nemo menu entries" ON)
+set(FM_EXEC "")
+foreach(cand tuxdirstat tuxdirstat-gtk4 tuxdirstat-gtk3 tuxdirstat-tk)
+  if(NOT FM_EXEC AND cand IN_LIST TUXDIRSTAT_PROGRAMS)
+    set(FM_EXEC ${cand})
+  endif()
+endforeach()
+if(TUXDIRSTAT_FILEMANAGERS AND FM_EXEC)
+  configure_file(data/filemanagers/dolphin.desktop.in ${CMAKE_BINARY_DIR}/fm/tuxdirstat.desktop @ONLY)
+  configure_file(data/filemanagers/tuxdirstat.nemo_action.in ${CMAKE_BINARY_DIR}/fm/tuxdirstat.nemo_action @ONLY)
+  configure_file(data/filemanagers/nautilus-tuxdirstat.py.in ${CMAKE_BINARY_DIR}/fm/tuxdirstat.py @ONLY)
+  install(FILES ${CMAKE_BINARY_DIR}/fm/tuxdirstat.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/kio/servicemenus
+          PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+  install(FILES ${CMAKE_BINARY_DIR}/fm/tuxdirstat.nemo_action DESTINATION ${CMAKE_INSTALL_DATADIR}/nemo/actions)
+  install(FILES ${CMAKE_BINARY_DIR}/fm/tuxdirstat.py DESTINATION ${CMAKE_INSTALL_DATADIR}/nautilus-python/extensions)
+endif()
 install(FILES completions/_tuxdirstat DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions)
 foreach(prog ${TUXDIRSTAT_PROGRAMS})
   if(NOT prog STREQUAL "tuxdirstat")
@@ -116,6 +159,7 @@ foreach(prog ${TUXDIRSTAT_PROGRAMS})
   install(FILES completions/tuxdirstat.fish DESTINATION ${CMAKE_INSTALL_DATADIR}/fish/vendor_completions.d RENAME ${prog}.fish)
 endforeach()
 
-if(NOT TUXDIRSTAT_QT AND NOT TUXDIRSTAT_GTK3 AND NOT TUXDIRSTAT_GTK4 AND NOT TUXDIRSTAT_TK)
-  message(FATAL_ERROR "En az bir arayüz seçin: -DTUXDIRSTAT_QT/GTK3/GTK4/TK=ON")
+
+if(NOT TUXDIRSTAT_QT AND NOT TUXDIRSTAT_GTK3 AND NOT TUXDIRSTAT_GTK4 AND NOT TUXDIRSTAT_TK AND NOT TUXDIRSTAT_TUI)
+  message(FATAL_ERROR "Choose at least one interface: -DTUXDIRSTAT_QT/GTK3/GTK4/TK/TUI=ON")
 endif()

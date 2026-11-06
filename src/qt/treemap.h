@@ -23,6 +23,7 @@ public:
     Node *selected() const { return selected_; }
     void setHighlight(int ext);  // -1: yok
     void setColorMode(ColorMode m);
+    void setShape(MapShape s);
     void schedule(int ms = 0) { timer_.start(ms); }
     // Düğümler silinmeden önce çağrılır: eski düğümlere işaretçileri bırakır.
     void invalidate();

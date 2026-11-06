@@ -33,6 +33,7 @@ public:
     Node *removalTarget(Node *n) const;
 
     // — tarama —
+    // path may be "host:/dir" (scan over SSH, see remoteScan()).
     void startScan(const std::string &path, Node *target = nullptr);
     // Anlık görüntüyü (ncdu JSON) arka planda yükler; bitince poll() NewTree döndürür.
     void openSnapshot(const std::string &file);
@@ -70,7 +71,7 @@ public:
     struct Loader;
 
 private:
-    void startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn);
+    void startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn, Node *target = nullptr);
 
     std::unique_ptr<Tree> tree_, pending_;
     std::unique_ptr<Scanner> scanner_;
@@ -100,5 +101,11 @@ int scanWorkers();
 struct Drive {
     std::string src, mp, fs;
     uint64_t total, used;
+    uint64_t avail = 0;  // free for unprivileged users
 };
+
+// Treemap colors by extension rank (largest type first); rows, if given, get the
+// extensions sorted by size with their colors.
+void computeExtColors(const std::vector<ExtStat> &stats, bool apparent, std::vector<RGBf> &colors,
+                      std::vector<ExtRow> *rows);
 std::vector<Drive> listDrives();

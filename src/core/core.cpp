@@ -725,7 +725,7 @@ std::string fmtTime(int64_t t)
     struct tm tm;
     localtime_r(&tt, &tm);
     char buf[32];
-    std::strftime(buf, sizeof buf, i18n::turkish() ? "%d.%m.%Y %H:%M" : "%Y-%m-%d %H:%M", &tm);
+    std::strftime(buf, sizeof buf, i18n::dateFormat(), &tm);
     return buf;
 }
 

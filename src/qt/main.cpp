@@ -18,8 +18,7 @@ int main(int argc, char **argv)
     QApplication::setDesktopFileName("tuxdirstat");
     QApplication app(argc, argv);
     if (i18n::explicitChoice())  // MIME açıklamaları QLocale'e göre seçilir
-        QLocale::setDefault(i18n::turkish() ? QLocale(QLocale::Turkish, QLocale::Turkey)
-                                            : QLocale(QLocale::English, QLocale::UnitedStates));
+        QLocale::setDefault(QLocale(QString::fromLatin1(i18n::code())));
     app.setApplicationName("TuxDirStat");
     app.setWindowIcon(appIcon());
     applyTheme(Settings::load().theme);

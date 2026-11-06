@@ -1,0 +1,33 @@
+# Flatpak manifest (Flathub submission and local builds).
+#   flatpak-builder --user --install --force-clean build-flatpak packaging/flatpak/io.github.gubir34.TuxDirStat.yml
+# Inside the sandbox the host's system tools (pacman, journalctl, ssh, gio) are run through
+# flatpak-spawn --host, which needs the org.freedesktop.Flatpak permission below.
+app-id: io.github.gubir34.TuxDirStat
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
+command: tuxdirstat
+rename-desktop-file: tuxdirstat.desktop
+rename-icon: tuxdirstat
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # A disk usage analyzer has to see (and delete in) every folder the user can.
+  - --filesystem=host
+  - --filesystem=xdg-data/Trash
+  # Host tools: pacman, journalctl, docker, ssh, gio, systemctl
+  - --talk-name=org.freedesktop.Flatpak
+modules:
+  - name: tuxdirstat
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DTUXDIRSTAT_QT=ON
+      - -DTUXDIRSTAT_TUI=OFF
+      - -DTUXDIRSTAT_FILEMANAGERS=OFF
+    sources:
+      - type: git
+        url: https://github.com/Gubir34/TuxDirStat.git
+        tag: v1.5

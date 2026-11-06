@@ -15,6 +15,7 @@
 class QAction;
 class QCheckBox;
 class QLabel;
+class QLineEdit;
 class QProgressBar;
 class QTableWidget;
 class QTreeView;
@@ -36,6 +37,7 @@ private:
     void accept_();
     QTreeWidget *list_;
     QCheckBox *admin_;
+    QLineEdit *remote_;
 };
 
 class MainWindow : public QMainWindow {
@@ -62,6 +64,8 @@ public:
     void setGrouping(bool on);
     void setGroupMin(uint32_t n);
     void setColorByAge(bool on);
+    void setSunburst(bool on);
+    bool localTree() const { return isLocalTree(rootNode()); }
     Node *selectedNode() const;
     void showTable(ResultTable t);
 
@@ -96,12 +100,16 @@ private:
 
     // araçlar
     bool toolReady();
-    void runTool(const char *title, std::function<void(Job &)> fn);
+    void runTool(const char *title, std::function<void(Job &)> fn, bool needsTree = true);
     void findFiles();
     void openSnapshotDialog();
     void saveSnapshotDialog();
     void exportCsvDialog();
     void compareDialog();
+    void exportHtmlDialog();
+    void exportPngDialog();
+    void setRecording(bool on);
+    void updateRecordAction();
 
     Session session_;
     Settings settings_;
@@ -128,6 +136,10 @@ private:
     QAction *actGroup_ = nullptr;
     QAction *actTreemap_ = nullptr;
     QAction *actAge_ = nullptr;
+    QAction *actSunburst_ = nullptr;
+    QAction *actRecord_ = nullptr;
+    QAction *actOpenLast_ = nullptr;
+    bool openedLast_ = false;  // the tree shown is the cached last scan
 
     QMimeDatabase mime_;
     std::unordered_map<uint32_t, QString> extDesc_;

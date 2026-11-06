@@ -194,7 +194,7 @@ void ResultDialog::updateButtons()
     copyBtn_->setText(one && !one->command.empty() ? QT("Copy command") : QT("Copy path"));
     bool del = !rows.empty();
     for (int r : rows)
-        del = del && t_.rows[size_t(r)].deletable && !t_.rows[size_t(r)].path.empty();
+        del = del && t_.rows[size_t(r)].deletable && t_.rows[size_t(r)].path.rfind('/', 0) == 0;
     trashBtn_->setEnabled(del);
 }
 

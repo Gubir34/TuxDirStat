@@ -15,8 +15,10 @@ struct Settings {
     bool showTreemap = true;
     uint32_t groupMin = GROUP_MIN;
     std::string theme = "system";     // "system", "light" ya da "dark"
-    std::string language = "system";  // "system", "en" ya da "tr"
+    std::string language = "system";  // "system" or a language code (i18n::languages())
     bool colorByAge = false;          // treemap'i son değişiklik yaşına göre renklendir
+    bool sunburst = false;            // rings instead of rectangles
+    bool openLast = true;             // reopen the last scan at start (no path given)
 
     static Settings load();
     void save() const;

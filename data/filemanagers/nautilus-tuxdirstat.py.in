@@ -1,0 +1,27 @@
+# Nautilus extension: "Analyze disk usage with TuxDirStat" for folders.
+# Needs nautilus-python (python-nautilus on Arch, nautilus-python on Fedora).
+import locale
+import subprocess
+
+from gi.repository import GObject, Nautilus
+
+EXEC = "@FM_EXEC@"
+LABEL = "TuxDirStat ile disk kullanımını incele" if (locale.getlocale()[0] or "").startswith("tr") \
+    else "Analyze disk usage with TuxDirStat"
+
+
+class TuxDirStatExtension(GObject.GObject, Nautilus.MenuProvider):
+    def _item(self, folder, name):
+        if folder is None or folder.get_uri_scheme() != "file" or not folder.is_directory():
+            return []
+        item = Nautilus.MenuItem(name=name, label=LABEL, icon="tuxdirstat")
+        item.connect("activate", lambda *_: subprocess.Popen([EXEC, folder.get_location().get_path()]))
+        return [item]
+
+    # Nautilus 43+ passes (files); older versions pass (window, files).
+    def get_file_items(self, *args):
+        files = args[-1]
+        return self._item(files[0], "TuxDirStat::Selection") if len(files) == 1 else []
+
+    def get_background_items(self, *args):
+        return self._item(args[-1], "TuxDirStat::Background")

@@ -1,9 +1,9 @@
-.TH TUXDIRSTAT 1 "2026-11-06" "TuxDirStat 1.4" "User Commands"
+.TH TUXDIRSTAT 1 "2026-11-06" "TuxDirStat 1.5" "User Commands"
 .SH NAME
-tuxdirstat, tuxdirstat-gtk3, tuxdirstat-gtk4, tuxdirstat-tk \- disk usage analyzer with tree, extension list and treemap
+tuxdirstat, tuxdirstat-gtk3, tuxdirstat-gtk4, tuxdirstat-tk, tuxdirstat-tui \- disk usage analyzer with tree, extension list and treemap
 .SH SYNOPSIS
 .B tuxdirstat
-.RI [ folder | snapshot.json ]
+.RI [ folder | snapshot.json | host:/folder ]
 .br
 .B tuxdirstat
 .I output-options
@@ -24,13 +24,26 @@ is the Qt interface;
 .B tuxdirstat-gtk4
 and
 .B tuxdirstat-tk
-are the same program with other toolkits. All of them share the command line options below.
+are the same program with other toolkits, and
+.B tuxdirstat-tui
+runs in a terminal (ncurses; press \fB?\fR for its keys). All of them share the command line
+options below.
 .PP
 Without an output option a window opens. Giving a folder scans it right away; giving a
-snapshot file opens it instead.
+snapshot file opens it instead. Without either, the last scan is shown again (this can be
+turned off in the View menu).
+.PP
+A location written as \fIhost\fB:\fI/folder\fR (or \fBssh://\fIhost/folder\fR) is scanned on
+another computer over
+.BR ssh (1).
+This needs key login without a password prompt. The remote side runs TuxDirStat 1.5 or newer
+when it is installed and GNU
+.BR find (1)
+otherwise. Files of a remote scan cannot be deleted from here.
 .PP
 The window also offers duplicate file search, cleanup suggestions, search, snapshot
-comparison, usage by owner, CSV export, age coloring, an administrator (read-only) scan
+comparison, usage by owner, installed packages, btrfs sharing and compression, size history,
+HTML/PNG/CSV export, a sunburst view, age coloring, an administrator (read-only) scan
 through
 .BR pkexec (1)
 and, on Arch Linux, package ownership checks.
@@ -70,14 +83,45 @@ Write every file and folder to a CSV file.
 .TP
 .BI \-\-compare " snapshot"
 Show what grew, shrank, appeared or disappeared since an earlier snapshot.
+.TP
+.BI \-\-html " file"
+Self-contained HTML report with treemap and sunburst images, the largest folders and files
+and the file types.
+.TP
+.BI \-\-png " file"
+Treemap image (see \fB\-\-size\fR).
+.TP
+.BI \-\-sunburst " file"
+Sunburst image: the folder in the middle, each ring one level deeper.
+.TP
+.B \-\-btrfs
+How much data is shared with snapshots or reflinked copies (deleting it frees nothing) and
+how much is stored compressed, per top-level folder and per subvolume. Run as root with
+.BR compsize (8)
+installed to also see the compressed size on disk.
+.TP
+.B \-\-history
+Size of each top-level item at every recorded date, with a trend line.
+.TP
+.B \-\-packages
+Installed pacman packages and Flatpak apps by size, with orphaned packages marked. Needs no
+folder.
+.TP
+.B \-\-history\-record
+Scan every folder listed in \fI~/.config/tuxdirstat/history.conf\fR and save its sizes. The
+weekly systemd user timer (Tools \(-> Record size history weekly) runs this.
 .SH OTHER OPTIONS
 .TP
 .BI \-\-import " file"
 Read a snapshot (written by TuxDirStat or by \fBncdu \-o\fR) instead of scanning.
-Files ending in .gz, .zst, .xz or .bz2 are decompressed first.
+Files ending in .gz, .zst, .xz or .bz2 are decompressed first. \fB\-\-export\fR and
+\fB\-\-csv\fR compress names ending in .gz and write to standard output for \fB\-\fR.
 .TP
 .BI \-\-top " n"
 Rows per list in \fB\-\-report\fR (default 15).
+.TP
+.BI \-\-size " width" x height
+Image size for \fB\-\-png\fR and \fB\-\-sunburst\fR (default 1600x1000).
 .TP
 .B \-\-apparent
 Use the apparent file size instead of the space used on disk.
@@ -92,8 +136,9 @@ Minimum number of items per group (default 16).
 Cross into other file systems. By default the scan stays on the starting file system
 (btrfs subvolumes of the same device are included) and always skips virtual file systems.
 .TP
-.BI \-\-lang " en|tr"
-Interface language. The default follows the saved setting, then the locale.
+.BI \-\-lang " code"
+Interface language (\fBen\fR, \fBtr\fR, ...). The default follows the saved setting, then the
+locale. Translations live in \fIpo/\fR in the source tree.
 .TP
 .BR \-h ", " \-\-help
 Show a short help.
@@ -103,7 +148,16 @@ Show the version.
 .SH FILES
 .TP
 .I ~/.config/tuxdirstat/settings.conf
-Settings shared by all interfaces: size mode, grouping, theme, language, age coloring.
+Settings shared by all interfaces: size mode, grouping, theme, language, age coloring, sunburst.
+.TP
+.I ~/.config/tuxdirstat/history.conf
+Folders whose size is recorded weekly.
+.TP
+.I ~/.local/share/tuxdirstat/history/
+Recorded sizes (gzip-compressed snapshots, up to 60 per folder).
+.TP
+.I ~/.cache/tuxdirstat/last-scan.json.gz
+The last scan, shown again at the next start.
 .SH EXAMPLES
 .nf
 tuxdirstat ~/Games
@@ -112,12 +166,18 @@ tuxdirstat \-\-find '*.iso >1G older:1y' ~
 tuxdirstat \-\-export home\-$(date +%F).json ~
 tuxdirstat \-\-compare home\-2026\-10\-01.json ~
 sudo tuxdirstat \-\-unowned /
+tuxdirstat \-\-html report.html \-\-sunburst rings.png ~/Projects
+tuxdirstat \-\-report pi:/home
+tuxdirstat \-\-packages
+tuxdirstat\-tui /var
 .fi
 .SH EXIT STATUS
 0 on success, 1 if a scan, file or tool failed, 2 for wrong usage.
 .SH SEE ALSO
 .BR du (1),
 .BR ncdu (1),
+.BR ssh (1),
+.BR compsize (8),
 .BR pacman (8)
 .SH LICENSE
 GPL\-3.0\-or\-later. https://github.com/Gubir34/TuxDirStat

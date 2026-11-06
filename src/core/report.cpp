@@ -15,6 +15,7 @@
 #include "tools.h"
 #include "i18n.h"
 #include "session.h"
+#include "treemap_render.h"
 
 #ifndef TUXDIRSTAT_VERSION
 #define TUXDIRSTAT_VERSION "dev"
@@ -53,10 +54,14 @@ Settings Settings::load()
             s.showTreemap = b;
         else if (k == "theme" && (v == "system" || v == "light" || v == "dark"))
             s.theme = v;
-        else if (k == "language" && (v == "system" || v == "en" || v == "tr"))
+        else if (k == "language" && (v == "system" || i18n::known(v)))
             s.language = v;
         else if (k == "color_by_age")
             s.colorByAge = b;
+        else if (k == "sunburst")
+            s.sunburst = b;
+        else if (k == "open_last")
+            s.openLast = b;
         else if (k == "group_min")
             s.groupMin = uint32_t(std::clamp(std::atoi(v.c_str()), 2, 100000));
     }
@@ -77,7 +82,9 @@ void Settings::save() const
       << "show_treemap=" << showTreemap << "\n"
       << "theme=" << theme << "\n"
       << "language=" << language << "\n"
-      << "color_by_age=" << colorByAge << "\n";
+      << "color_by_age=" << colorByAge << "\n"
+      << "sunburst=" << sunburst << "\n"
+      << "open_last=" << openLast << "\n";
 }
 
 static bool darkColor(const std::string &rgb)
@@ -211,7 +218,8 @@ namespace {
 bool takesValue(const std::string &a)
 {
     return a == "--top" || a == "--group-min" || a == "--find" || a == "--export" || a == "--csv" ||
-           a == "--compare" || a == "--import" || a == "--lang";
+           a == "--compare" || a == "--import" || a == "--lang" || a == "--png" || a == "--sunburst" ||
+           a == "--html" || a == "--size";
 }
 
 void usage(const char *prog)
@@ -227,15 +235,23 @@ void usage(const char *prog)
               << "  --unowned         " << T("files under /usr, /etc and /opt that no pacman package owns") << "\n"
               << "  --export FILE     " << T("save the scan as a snapshot (ncdu JSON format)") << "\n"
               << "  --csv FILE        " << T("write every file and folder to a CSV file") << "\n"
-              << "  --compare FILE    " << T("show what changed since an earlier snapshot") << "\n\n"
+              << "  --compare FILE    " << T("show what changed since an earlier snapshot") << "\n"
+              << "  --html FILE       " << T("HTML report with treemap and sunburst images") << "\n"
+              << "  --png FILE        " << T("treemap image (PNG)") << "\n"
+              << "  --sunburst FILE   " << T("sunburst image (PNG)") << "\n"
+              << "  --btrfs           " << T("btrfs: data shared with snapshots, compressed data") << "\n"
+              << "  --history         " << T("size history of the folder (see --history-record)") << "\n"
+              << "  --packages        " << T("installed pacman and Flatpak packages by size (no scan)") << "\n"
+              << "  --history-record  " << T("scan the recorded folders and save their sizes (used by the weekly timer)") << "\n\n"
               << T("Other options:") << "\n"
               << "  --import FILE     " << T("read a snapshot (TuxDirStat or ncdu -o) instead of scanning") << "\n"
               << "  --top N           " << TF("rows per report list (default %1)", {"15"}) << "\n"
+              << "  --size WxH        " << TF("image size for --png and --sunburst (default %1)", {"1600x1000"}) << "\n"
               << "  --apparent        " << T("use apparent size (default: size on disk)") << "\n"
               << "  --group           " << T("group similar items and list the most crowded groups") << "\n"
               << "  --group-min N     " << TF("minimum items per group (default %1)", {std::to_string(GROUP_MIN)}) << "\n"
               << "  --all-fs          " << T("cross into other file systems") << "\n"
-              << "  --lang en|tr      " << T("interface language") << "\n"
+              << "  --lang CODE       " << T("interface language (en, tr, …)") << "\n"
               << "  -h, --help        " << T("show this help") << "\n"
               << "  --version         " << T("show the version") << "\n";
 }
@@ -279,6 +295,7 @@ int runCommandLine(int argc, char **argv)
     i18n::applyToEnvironment();
 
     bool oneFs = true, cli = false;
+    int imgW = 1600, imgH = 1000;
     ReportOptions o;
     // Çıktılar komut satırındaki sırayla üretilir.
     std::vector<std::pair<std::string, std::string>> outputs;
@@ -294,16 +311,26 @@ int runCommandLine(int argc, char **argv)
             }
             return argv[++i];
         };
-        if (a == "-h" || a == "--help") {
+        if (a == "--history-record") {
+            return recordHistory(std::cout);
+        } else if (a == "-h" || a == "--help") {
             usage(prog);
             return 0;
         } else if (a == "--version") {
             std::cout << "TuxDirStat " << TUXDIRSTAT_VERSION << "\n";
             return 0;
-        } else if (a == "--report" || a == "--duplicates" || a == "--cleanup" || a == "--owners" || a == "--unowned") {
+        } else if (a == "--report" || a == "--duplicates" || a == "--cleanup" || a == "--owners" || a == "--unowned" ||
+                   a == "--btrfs" || a == "--history" || a == "--packages") {
             outputs.emplace_back(a, "");
-        } else if (a == "--find" || a == "--export" || a == "--csv" || a == "--compare") {
+        } else if (a == "--find" || a == "--export" || a == "--csv" || a == "--compare" || a == "--png" ||
+                   a == "--sunburst" || a == "--html") {
             outputs.emplace_back(a, value());
+        } else if (a == "--size") {
+            const std::string v = value();
+            if (std::sscanf(v.c_str(), "%dx%d", &imgW, &imgH) != 2 || imgW < 16 || imgH < 16) {
+                std::cerr << prog << ": " << TF("invalid size: %1 (use e.g. 1600x1000)", {v}) << "\n";
+                return 2;
+            }
         } else if (a == "--import") {
             importFile = value();
             cli = true;
@@ -333,9 +360,26 @@ int runCommandLine(int argc, char **argv)
     if (outputs.empty())
         outputs.emplace_back("--report", "");
 
+    Job job("", [](Job &) {});
+    if (importFile.empty() && pathArgument(argc, argv).empty() &&
+        std::all_of(outputs.begin(), outputs.end(), [](const auto &o) { return o.first == "--packages"; })) {
+        ResultTable t = packageSizes(job);
+        printTable(std::cout, t);
+        return job.error.empty() ? 0 : 1;
+    }
     std::unique_ptr<Tree> tree;
     double seconds = 0;
-    if (!importFile.empty()) {
+    std::string remoteHost, remotePath;
+    if (importFile.empty() && parseRemote(pathArgument(argc, argv), remoteHost, remotePath)) {
+        std::string err;
+        auto t0 = std::chrono::steady_clock::now();
+        tree = remoteScan(pathArgument(argc, argv), oneFs, &err);
+        if (!tree) {
+            std::cerr << prog << ": " << err << "\n";
+            return 1;
+        }
+        seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    } else if (!importFile.empty()) {
         std::string err;
         auto t0 = std::chrono::steady_clock::now();
         tree = loadSnapshot(importFile, &err);
@@ -373,7 +417,6 @@ int runCommandLine(int argc, char **argv)
             std::cout << "\n";
         first = false;
     };
-    Job job("", [](Job &) {});
     for (const auto &[opt, val] : outputs) {
         std::string err;
         if (opt == "--export") {
@@ -383,6 +426,17 @@ int runCommandLine(int argc, char **argv)
             }
         } else if (opt == "--csv") {
             if (!exportCsv(root, val, &err)) {
+                std::cerr << prog << ": " << val << ": " << err << "\n";
+                rc = 1;
+            }
+        } else if (opt == "--png" || opt == "--sunburst") {
+            if (!exportMapPng(root, val, imgW, imgH, o.apparent, ColorMode::Extension,
+                              opt == "--png" ? MapShape::Rectangles : MapShape::Rings, &err)) {
+                std::cerr << prog << ": " << val << ": " << err << "\n";
+                rc = 1;
+            }
+        } else if (opt == "--html") {
+            if (!exportHtml(root, val, o.apparent, &err)) {
                 std::cerr << prog << ": " << val << ": " << err << "\n";
                 rc = 1;
             }
@@ -412,6 +466,12 @@ int runCommandLine(int argc, char **argv)
                 t = findUnowned(root, o.apparent, job);
             } else if (opt == "--compare") {
                 t = compareWithSnapshot(root, val, o.apparent, job);
+            } else if (opt == "--btrfs") {
+                t = btrfsUsage(root, job);
+            } else if (opt == "--history") {
+                t = historyGrowth(root, o.apparent, job);
+            } else if (opt == "--packages") {
+                t = packageSizes(job);
             }
             if (err.empty())
                 err = job.error;

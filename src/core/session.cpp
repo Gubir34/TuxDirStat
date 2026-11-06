@@ -19,6 +19,7 @@
 #include <sys/statvfs.h>
 #include <sys/wait.h>
 #include <thread>
+#include <unordered_map>
 #include <unistd.h>
 
 extern char **environ;
@@ -67,13 +68,15 @@ static uint64_t countNodes(const Node *root)
     return n;
 }
 
-void Session::startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn)
+void Session::startLoader(std::string status, std::function<std::unique_ptr<Tree>(Loader &)> fn, Node *target)
 {
     scanner_.reset();
+    if (loader_)
+        loader_->cancelled = true;
     auto ld = std::make_shared<Loader>();
     ld->status = std::move(status);
     loader_ = ld;
-    target_ = nullptr;
+    target_ = target;
     pending_.reset();
     std::thread([ld, fn = std::move(fn)] {
         auto t0 = std::chrono::steady_clock::now();
@@ -134,6 +137,14 @@ void Session::startPrivilegedScan(const std::string &path)
 
 void Session::startScan(const std::string &path, Node *target)
 {
+    std::string host, rpath;
+    if (parseRemote(path, host, rpath)) {
+        const bool one = oneFs;
+        startLoader(TF("Scanning %1 over SSH…", {path}), [path, one](Loader &ld) {
+            return remoteScan(path, one, &ld.error, &ld.cancelled);
+        }, target);
+        return;
+    }
     if (loader_)
         loader_->cancelled = true;
     loader_.reset();
@@ -193,10 +204,14 @@ Session::Result Session::poll()
         error_.clear();
         pending_ = std::move(ld->tree);
         pendingExt_.clear();
-        target_ = nullptr;
+        if (target_ && (!root() || !target_->isWithin(root()))) {
+            pending_.reset();
+            target_ = nullptr;
+            return Result::Cancelled;
+        }
         if (grouping)
             groupFiles(pending_->root, pending_->scratch(), groupMin);
-        return Result::NewTree;
+        return target_ ? Result::Refresh : Result::NewTree;
     }
     if (!scanner_)
         return Result::Idle;
@@ -263,6 +278,23 @@ void Session::remove(Node *n)
     recomputeExt();
 }
 
+void computeExtColors(const std::vector<ExtStat> &stats, bool apparent, std::vector<RGBf> &colors, std::vector<ExtRow> *rowsOut)
+{
+    std::vector<ExtRow> rows;
+    for (uint32_t i = 0; i < stats.size(); ++i)
+        if (stats[i].count)
+            rows.push_back({i, apparent ? stats[i].size : stats[i].alloc, stats[i].count, {}});
+    std::sort(rows.begin(), rows.end(), [](const ExtRow &a, const ExtRow &b) { return a.bytes > b.bytes; });
+    colors.assign(std::max<size_t>(stats.size(), ExtTable::count()), dirColor());
+    const auto &pal = palette();
+    for (size_t r = 0; r < rows.size(); ++r) {
+        rows[r].color = pal[r % pal.size()];
+        colors[rows[r].ext] = rows[r].color;
+    }
+    if (rowsOut)
+        *rowsOut = std::move(rows);
+}
+
 void Session::recomputeExt(const std::vector<ExtStat> *precomputed)
 {
     ext.clear();
@@ -270,16 +302,7 @@ void Session::recomputeExt(const std::vector<ExtStat> *precomputed)
     if (!root())
         return;
     const std::vector<ExtStat> stats = precomputed && !precomputed->empty() ? *precomputed : computeExtStats(root());
-    for (uint32_t i = 0; i < stats.size(); ++i)
-        if (stats[i].count)
-            ext.push_back({i, apparent ? stats[i].size : stats[i].alloc, stats[i].count, {}});
-    std::sort(ext.begin(), ext.end(), [](const ExtRow &a, const ExtRow &b) { return a.bytes > b.bytes; });
-    colors.assign(std::max<size_t>(stats.size(), ExtTable::count()), dirColor());
-    const auto &pal = palette();
-    for (size_t r = 0; r < ext.size(); ++r) {
-        ext[r].color = pal[r % pal.size()];
-        colors[ext[r].ext] = ext[r].color;
-    }
+    computeExtColors(stats, apparent, colors, &ext);
 }
 
 std::string Session::extLabel(uint32_t e) const
@@ -289,8 +312,45 @@ std::string Session::extLabel(uint32_t e) const
 
 // ───────────────────────────── Sistem işlemleri ─────────────────────────────
 
-static int runWait(const std::vector<std::string> &args)
+// Inside Flatpak, system tools (pacman, journalctl, ssh, gio, systemctl…) live on the host;
+// programs missing from the sandbox are run there with flatpak-spawn --host.
+static bool inFlatpak()
 {
+    static const bool yes = ::access("/.flatpak-info", F_OK) == 0;
+    return yes;
+}
+
+static bool inSandboxPath(const std::string &name)
+{
+    if (name.find('/') != std::string::npos)
+        return ::access(name.c_str(), X_OK) == 0;
+    const char *path = std::getenv("PATH");
+    std::string p = path ? path : "/usr/local/bin:/usr/bin:/bin";
+    size_t start = 0;
+    while (start <= p.size()) {
+        size_t end = p.find(':', start);
+        if (end == std::string::npos)
+            end = p.size();
+        const std::string dir = p.substr(start, end - start);
+        if (!dir.empty() && ::access((dir + "/" + name).c_str(), X_OK) == 0)
+            return true;
+        start = end + 1;
+    }
+    return false;
+}
+
+static std::vector<std::string> hostArgs(const std::vector<std::string> &args)
+{
+    if (!inFlatpak() || args.empty() || inSandboxPath(args[0]))
+        return args;
+    std::vector<std::string> v{"flatpak-spawn", "--host"};
+    v.insert(v.end(), args.begin(), args.end());
+    return v;
+}
+
+static int runWait(const std::vector<std::string> &argsIn)
+{
+    const std::vector<std::string> args = hostArgs(argsIn);
     std::vector<char *> argv;
     for (const auto &a : args)
         argv.push_back(const_cast<char *>(a.c_str()));
@@ -310,10 +370,11 @@ static int runWait(const std::vector<std::string> &args)
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
-int runCapture(const std::vector<std::string> &args, std::string *out, int timeoutMs)
+int runCapture(const std::vector<std::string> &argsIn, std::string *out, int timeoutMs)
 {
-    if (args.empty())
+    if (argsIn.empty())
         return -1;
+    const std::vector<std::string> args = hostArgs(argsIn);
     int pfd[2];
     if (::pipe2(pfd, O_CLOEXEC) != 0)
         return -1;
@@ -374,19 +435,20 @@ int runCapture(const std::vector<std::string> &args, std::string *out, int timeo
 
 bool haveProgram(const std::string &name)
 {
-    const char *path = std::getenv("PATH");
-    std::string p = path ? path : "/usr/local/bin:/usr/bin:/bin";
-    size_t start = 0;
-    while (start <= p.size()) {
-        size_t end = p.find(':', start);
-        if (end == std::string::npos)
-            end = p.size();
-        const std::string dir = p.substr(start, end - start);
-        if (!dir.empty() && ::access((dir + "/" + name).c_str(), X_OK) == 0)
-            return true;
-        start = end + 1;
-    }
-    return false;
+    if (inSandboxPath(name))
+        return true;
+    if (!inFlatpak())
+        return false;
+    static std::mutex m;
+    static std::unordered_map<std::string, bool> cache;
+    std::lock_guard l(m);
+    auto it = cache.find(name);
+    if (it != cache.end())
+        return it->second;
+    std::string out;
+    const bool found = runCapture({"flatpak-spawn", "--host", "sh", "-c", "command -v \"$1\"", "sh", name}, &out, 5000) == 0;
+    cache[name] = found;
+    return found;
 }
 
 std::string selfExe()
@@ -413,6 +475,11 @@ static int rmEntry(const char *path, const struct stat *, int type, struct FTW *
 
 bool removePath(const std::string &path, std::string *err)
 {
+    if (path.empty() || path[0] != '/') {  // remote ("host:/…") or relative: never delete
+        if (err)
+            *err = T("Only local files can be deleted.");
+        return false;
+    }
     struct stat st;
     if (::lstat(path.c_str(), &st) != 0) {
         if (err)
@@ -427,6 +494,8 @@ bool removePath(const std::string &path, std::string *err)
 
 bool trashWithCommand(const std::string &path)
 {
+    if (path.empty() || path[0] != '/')
+        return false;
     if (runWait({"gio", "trash", "--", path}) == 0)
         return true;
     return runWait({"kioclient", "move", path, "trash:/"}) == 0;
@@ -510,7 +579,7 @@ std::vector<Drive> listDrives()
         if (::statvfs(m.mp.c_str(), &sv) != 0 || sv.f_blocks == 0)
             continue;
         const uint64_t total = uint64_t(sv.f_blocks) * sv.f_frsize;
-        out.push_back({m.src, m.mp, m.fs, total, total - uint64_t(sv.f_bfree) * sv.f_frsize});
+        out.push_back({m.src, m.mp, m.fs, total, total - uint64_t(sv.f_bfree) * sv.f_frsize, uint64_t(sv.f_bavail) * sv.f_frsize});
     }
     return out;
 }

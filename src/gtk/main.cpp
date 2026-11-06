@@ -15,6 +15,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "extinfo.h"
 #include "i18n.h"
 #include "tools.h"
@@ -824,9 +827,16 @@ private:
 
     // araçlar
     bool colorByAge();
+    bool boolState(const char *action);
+    bool local() const { return isLocalTree(s_.root()); }
     bool toolReady();
     void showTable(ResultTable t);
-    void runTool(const char *title, std::function<void(Job &)> fn);
+    void runTool(const char *title, std::function<void(Job &)> fn, bool needsTree = true);
+    void exportHtmlDialog();
+    void exportPngDialog();
+    void updateRecordState();
+    bool openedLast_ = false;
+    bool openLastOn_ = true;
     void findFiles();
     void openSnapshotDialog();
     void saveSnapshotDialog();
@@ -885,6 +895,10 @@ void appDestroyed(GtkWidget *, gpointer self)
         gtk_tree_view_set_model(GTK_TREE_VIEW(view), nullptr);
     }
     a->model_->root = nullptr;
+    if (a->openLastOn_ && !a->s_.scanning() && a->local()) {
+        std::string err;
+        saveLastScan(a->s_.root(), &err);
+    }
     if (a->area_) {
 #if DT_GTK4
         gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(a->area_), nullptr, nullptr, nullptr);
@@ -1014,6 +1028,56 @@ struct ActionTable {
         if (!app(p)->applyingSettings_)
             showError(GTK_WINDOW(app(p)->win_), "TuxDirStat", T("The new language is used after TuxDirStat is restarted."));
     }
+    static void sunburst(GSimpleAction *a, GVariant *v, gpointer p)
+    {
+        g_simple_action_set_state(a, v);
+        app(p)->tm_.forgetNodes();
+        app(p)->scheduleRender(0);
+        app(p)->saveSettings();
+    }
+    static void openLast(GSimpleAction *a, GVariant *v, gpointer p)
+    {
+        g_simple_action_set_state(a, v);
+        app(p)->openLastOn_ = g_variant_get_boolean(v);
+        if (!g_variant_get_boolean(v) && !app(p)->applyingSettings_)
+            ::unlink(lastScanFile().c_str());
+        app(p)->saveSettings();
+    }
+    static void record(GSimpleAction *a, GVariant *v, gpointer p)
+    {
+        App *self = app(p);
+        if (!self->local())
+            return;
+        const bool on = g_variant_get_boolean(v);
+        const std::string path = self->s_.root()->path();
+        std::string err;
+        bool ok = setHistoryRecording(path, on, &err);
+        if (ok && on)
+            ok = recordHistorySnapshot(self->s_.root(), &err);
+        if (!ok)
+            showError(GTK_WINDOW(self->win_), "TuxDirStat", err);
+        else
+            gtk_label_set_text(GTK_LABEL(self->statusL_),
+                               (on ? TF("The size of %1 is now recorded every week.", {path}) : TF("Stopped recording %1.", {path})).c_str());
+        g_simple_action_set_state(a, g_variant_new_boolean(historyRecording(path)));
+    }
+    static void packages(GSimpleAction *, GVariant *, gpointer p)
+    {
+        app(p)->runTool(T("Installed packages"), [](Job &j) { j.result = packageSizes(j); }, false);
+    }
+    static void btrfs(GSimpleAction *, GVariant *, gpointer p)
+    {
+        Node *root = app(p)->s_.root();
+        app(p)->runTool(T("Btrfs: shared and compressed data"), [root](Job &j) { j.result = btrfsUsage(root, j); });
+    }
+    static void history(GSimpleAction *, GVariant *, gpointer p)
+    {
+        Node *root = app(p)->s_.root();
+        const bool ap = app(p)->s_.apparent;
+        app(p)->runTool(T("Size history"), [root, ap](Job &j) { j.result = historyGrowth(root, ap, j); });
+    }
+    static void html(GSimpleAction *, GVariant *, gpointer p) { app(p)->exportHtmlDialog(); }
+    static void png(GSimpleAction *, GVariant *, gpointer p) { app(p)->exportPngDialog(); }
     static void openSnap(GSimpleAction *, GVariant *, gpointer p) { app(p)->openSnapshotDialog(); }
     static void saveSnap(GSimpleAction *, GVariant *, gpointer p) { app(p)->saveSnapshotDialog(); }
     static void csv(GSimpleAction *, GVariant *, gpointer p) { app(p)->exportCsvDialog(); }
@@ -1052,12 +1116,12 @@ struct ActionTable {
     static Node *mn(gpointer p) { return app(p)->menuNode_; }
     static void nOpen(GSimpleAction *, GVariant *, gpointer p)
     {
-        if (Node *n = mn(p))
+        if (Node *n = mn(p); n && app(p)->local())
             openPath(n->path());
     }
     static void nReveal(GSimpleAction *, GVariant *, gpointer p)
     {
-        if (Node *n = mn(p))
+        if (Node *n = mn(p); n && app(p)->local())
             revealPath(n->path());
     }
     static void nCopy(GSimpleAction *, GVariant *, gpointer p)
@@ -1119,6 +1183,14 @@ void App::buildActions()
         {"owners", ActionTable::owners, nullptr, nullptr, nullptr},
         {"unowned", ActionTable::unowned, nullptr, nullptr, nullptr},
         {"compare", ActionTable::compare, nullptr, nullptr, nullptr},
+        {"sunburst", nullptr, nullptr, "false", ActionTable::sunburst},
+        {"open-last", nullptr, nullptr, "true", ActionTable::openLast},
+        {"record", nullptr, nullptr, "false", ActionTable::record},
+        {"packages", ActionTable::packages, nullptr, nullptr, nullptr},
+        {"btrfs", ActionTable::btrfs, nullptr, nullptr, nullptr},
+        {"history", ActionTable::history, nullptr, nullptr, nullptr},
+        {"export-html", ActionTable::html, nullptr, nullptr, nullptr},
+        {"export-png", ActionTable::png, nullptr, nullptr, nullptr},
         {"node-package", ActionTable::nPackage, nullptr, nullptr, nullptr},
         {"node-open", ActionTable::nOpen, nullptr, nullptr, nullptr},
         {"node-reveal", ActionTable::nReveal, nullptr, nullptr, nullptr},
@@ -1140,13 +1212,15 @@ void App::buildActions()
         {"win.delete", {"<Shift>Delete", nullptr}}, {"win.quit", {"<Control>q", nullptr}},
         {"win.treemap", {"F9", nullptr}},          {"win.group", {"<Control>g", nullptr}},
         {"win.age", {"F8", nullptr}},              {"win.find", {"<Control>f", nullptr}},
-        {"win.save-snapshot", {"<Control>s", nullptr}},
+        {"win.save-snapshot", {"<Control>s", nullptr}}, {"win.sunburst", {"F7", nullptr}},
     };
     for (auto &a : accels)
         gtk_application_set_accels_for_action(gapp_, a.action, a.keys);
     setActionEnabled("stop", false);
     setActionEnabled("zoom-out", false);
     setActionEnabled("unowned", havePacman());
+    setActionEnabled("packages", havePacman() || haveProgram("flatpak"));
+    setActionEnabled("record", false);
 }
 
 // Kayıtlı ayarları uygular; arayüz kurulduktan sonra çağrılır (kök yokken yalnızca durumları kurar).
@@ -1164,6 +1238,8 @@ void App::applySettings()
     set("group", g_variant_new_boolean(st.grouping));
     set("theme", g_variant_new_string(st.theme.c_str()));
     set("age", g_variant_new_boolean(st.colorByAge));
+    set("sunburst", g_variant_new_boolean(st.sunburst));
+    set("open-last", g_variant_new_boolean(st.openLast));
     set("language", g_variant_new_string(st.language.c_str()));
     showTreemapSetting_ = st.showTreemap;
     applyingSettings_ = false;
@@ -1183,6 +1259,8 @@ void App::saveSettings()
     st.showTreemap = g_variant_get_boolean(v);
     g_variant_unref(v);
     st.colorByAge = colorByAge();
+    st.sunburst = boolState("sunburst");
+    st.openLast = boolState("open-last");
     v = g_action_get_state(g_action_map_lookup_action(G_ACTION_MAP(win_), "language"));
     st.language = g_variant_get_string(v, nullptr);
     g_variant_unref(v);
@@ -1234,7 +1312,10 @@ App::App(GtkApplication *gapp, const std::string &path) : gapp_(gapp)
         openSnapshot(path);
     else if (!path.empty())
         startScan(path);
-    else
+    else if (boolState("open-last") && g_file_test(lastScanFile().c_str(), G_FILE_TEST_IS_REGULAR)) {
+        openedLast_ = true;
+        openSnapshot(lastScanFile());
+    } else
         g_idle_add_once([](gpointer p) { static_cast<App *>(p)->chooseTarget(); }, this);
 }
 
@@ -1262,6 +1343,8 @@ GtkWidget *App::buildToolbar()
                            T("Collect many similar items in a folder (like game assets) into one box:\n"
                              "files with the same extension, small files and small subfolders")));
     boxAdd(bar, toolButton("view-split-top-bottom", T("Treemap"), "win.treemap", true));
+    boxAdd(bar, toolButton("chart-pie", T("Sunburst"), "win.sunburst", true,
+                           T("Show the map as rings around the folder instead of rectangles")));
     boxAdd(bar, toolButton("chronometer", T("Color by age"), "win.age", true,
                            T("Color the treemap by when files last changed instead of by type")));
     sep();
@@ -1272,6 +1355,8 @@ GtkWidget *App::buildToolbar()
     GMenu *file = g_menu_new();
     g_menu_append(file, T("Open snapshot…"), "win.open-snapshot");
     g_menu_append(file, T("Save snapshot…"), "win.save-snapshot");
+    g_menu_append(file, T("Export HTML report…"), "win.export-html");
+    g_menu_append(file, T("Save map as image…"), "win.export-png");
     g_menu_append(file, T("Export as CSV…"), "win.export-csv");
     g_menu_append_section(menu, nullptr, G_MENU_MODEL(file));
     g_object_unref(file);
@@ -1281,7 +1366,11 @@ GtkWidget *App::buildToolbar()
     g_menu_append(tools, T("Cleanup suggestions…"), "win.cleanup");
     g_menu_append(tools, T("Usage by owner"), "win.owners");
     g_menu_append(tools, T("Files no package owns…"), "win.unowned");
+    g_menu_append(tools, T("Installed packages…"), "win.packages");
+    g_menu_append(tools, T("Btrfs: shared and compressed data…"), "win.btrfs");
     g_menu_append(tools, T("Compare with snapshot…"), "win.compare");
+    g_menu_append(tools, T("Size history…"), "win.history");
+    g_menu_append(tools, T("Record size history weekly"), "win.record");
     g_menu_append_section(menu, T("Tools"), G_MENU_MODEL(tools));
     g_object_unref(tools);
     GMenu *thr = g_menu_new();
@@ -1303,15 +1392,19 @@ GtkWidget *App::buildToolbar()
     g_menu_append_section(menu, T("Theme"), G_MENU_MODEL(themes));
     g_object_unref(themes);
     GMenu *langs = g_menu_new();
-    for (auto [id, label] : {std::pair{"system", T("System")}, {"en", "English"}, {"tr", "Türkçe"}}) {
-        GMenuItem *it = g_menu_item_new(label, nullptr);
-        g_menu_item_set_action_and_target_value(it, "win.language", g_variant_new_string(id));
+    std::vector<i18n::Language> langList{{"system", T("System")}};
+    for (const i18n::Language &l : i18n::languages())
+        langList.push_back(l);
+    for (const i18n::Language &l : langList) {
+        GMenuItem *it = g_menu_item_new(l.name.c_str(), nullptr);
+        g_menu_item_set_action_and_target_value(it, "win.language", g_variant_new_string(l.code.c_str()));
         g_menu_append_item(langs, it);
         g_object_unref(it);
     }
     g_menu_append_section(menu, T("Language"), G_MENU_MODEL(langs));
     g_object_unref(langs);
     GMenu *other = g_menu_new();
+    g_menu_append(other, T("Reopen the last scan at start"), "win.open-last");
     g_menu_append(other, T("About"), "win.about");
     g_menu_append_section(menu, nullptr, G_MENU_MODEL(other));
     GtkWidget *mb = gtk_menu_button_new();
@@ -1735,15 +1828,15 @@ void App::chooseTarget()
     gtk_label_set_xalign(GTK_LABEL(lbl), 0);
     boxAdd(box, lbl);
 
-    enum { D_ICON, D_LABEL, D_FS, D_USED, D_TOTAL, D_PCT, D_PATH, D_N };
+    enum { D_ICON, D_LABEL, D_FS, D_USED, D_FREE, D_TOTAL, D_PCT, D_PATH, D_N };
     GtkListStore *st = gtk_list_store_new(D_N, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                                          G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING);
+                                          G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING);
     const std::string home = homeDir();
     gtk_list_store_insert_with_values(st, nullptr, -1, D_ICON, "user-home", D_LABEL,
                                       TF("Home folder  (%1)", {home}).c_str(), D_PCT, -1, D_PATH, home.c_str(), -1);
     for (const Drive &d : listDrives())
         gtk_list_store_insert_with_values(st, nullptr, -1, D_ICON, "drive-harddisk", D_LABEL, d.mp.c_str(), D_FS,
-                                          d.fs.c_str(), D_USED, fmtSize(d.used).c_str(), D_TOTAL,
+                                          d.fs.c_str(), D_USED, fmtSize(d.used).c_str(), D_FREE, fmtSize(d.avail).c_str(), D_TOTAL,
                                           fmtSize(d.total).c_str(), D_PCT, int(d.used * 100 / d.total), D_PATH,
                                           d.mp.c_str(), -1);
     GtkWidget *list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(st));
@@ -1761,7 +1854,7 @@ void App::chooseTarget()
     struct {
         const char *t;
         int col;
-    } cs[] = {{T("Type"), D_FS}, {T("Used"), D_USED}, {T("Total"), D_TOTAL}};
+    } cs[] = {{T("Type"), D_FS}, {T("Used"), D_USED}, {T("Free"), D_FREE}, {T("Total"), D_TOTAL}};
     for (auto &c : cs) {
         GtkCellRenderer *r = gtk_cell_renderer_text_new();
         if (c.col != D_FS)
@@ -1784,17 +1877,42 @@ void App::chooseTarget()
     gtk_tree_view_set_cursor(GTK_TREE_VIEW(list), first, nullptr, FALSE);
     gtk_tree_path_free(first);
     boxAdd(box, scrolled(list), true);
+    GtkWidget *remoteRow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    boxAdd(remoteRow, gtk_label_new(T("Other computer (SSH):")));
+    GtkWidget *remote = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(remote), T("host:/path, e.g. pi:/home"));
+    gtk_widget_set_tooltip_text(remote, T("Scans a folder on another computer over SSH. Needs key login without a password prompt."));
+    boxAdd(remoteRow, remote, true);
+    boxAdd(box, remoteRow);
     GtkWidget *admin = gtk_check_button_new_with_label(T("Scan as administrator (read-only, asks for your password)"));
     gtk_widget_set_tooltip_text(admin, T("Reads folders your user cannot open, such as /root or /var/lib. Deleting still uses your own rights."));
     boxAdd(box, admin);
 
     struct Ctx {
         App *app;
-        GtkWidget *dlg, *list, *admin;
+        GtkWidget *dlg, *list, *admin, *remote;
     };
-    auto *ctx = new Ctx{this, dlg, list, admin};
+    auto *ctx = new Ctx{this, dlg, list, admin, remote};
     g_object_set_data_full(G_OBJECT(dlg), "dt-ctx", ctx, [](gpointer p) { delete static_cast<Ctx *>(p); });
     auto accept = [](Ctx *c) {
+#if DT_GTK4
+        std::string remoteText = gtk_editable_get_text(GTK_EDITABLE(c->remote));
+#else
+        std::string remoteText = gtk_entry_get_text(GTK_ENTRY(c->remote));
+#endif
+        while (!remoteText.empty() && remoteText.back() == ' ')
+            remoteText.pop_back();
+        if (!remoteText.empty()) {
+            std::string host, rpath;
+            if (!parseRemote(remoteText, host, rpath)) {
+                showError(GTK_WINDOW(c->dlg), "TuxDirStat", T("Write the remote location as host:/path, e.g. pi:/home"));
+                return;
+            }
+            App *app = c->app;
+            destroyWindow(c->dlg);
+            app->startScan(remoteText);
+            return;
+        }
         GtkTreeModel *m;
         GtkTreeIter it;
         if (!gtk_tree_selection_get_selected(gtk_tree_view_get_selection(GTK_TREE_VIEW(c->list)), &m, &it))
@@ -1816,6 +1934,7 @@ void App::chooseTarget()
                          acceptFn(static_cast<Ctx *>(c));
                      }),
                      ctx);
+    g_signal_connect(remote, "activate", DT_CB(+[](GtkEntry *, gpointer c) { acceptFn(static_cast<Ctx *>(c)); }), ctx);
 
     GtkWidget *btns = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     GtkWidget *pick = gtk_button_new_with_label(T("Choose folder…"));
@@ -1858,7 +1977,9 @@ void App::chooseTarget()
 
 void App::startScan(const std::string &path, Node *target)
 {
-    char *real = realpath(path.c_str(), nullptr);
+    openedLast_ = false;
+    std::string host, rpath;
+    char *real = parseRemote(path, host, rpath) ? nullptr : realpath(path.c_str(), nullptr);
     const std::string abs = real ? real : path;
     free(real);
     s_.startScan(abs, target);
@@ -1967,9 +2088,23 @@ bool App::poll()
         return false;
     }
     afterChange();
-    const std::string done = TF("Done: %1 items in %2 s.", {fmtInt(s_.lastCount()), fmtDecimal(s_.elapsed(), 2)});
+    updateRecordState();
+    std::string done = TF("Done: %1 items in %2 s.", {fmtInt(s_.lastCount()), fmtDecimal(s_.elapsed(), 2)});
+    if (openedLast_) {
+        openedLast_ = false;
+        struct stat sb;
+        if (::stat(lastScanFile().c_str(), &sb) == 0)
+            done = TF("Showing the saved scan from %1. Press F5 to scan again.", {fmtTime(sb.st_mtime)});
+    }
     gtk_label_set_text(GTK_LABEL(statusL_), done.c_str());
     return false;
+}
+
+void App::updateRecordState()
+{
+    GAction *a = g_action_map_lookup_action(G_ACTION_MAP(win_), "record");
+    setActionEnabled("record", local());
+    g_simple_action_set_state(G_SIMPLE_ACTION(a), g_variant_new_boolean(local() && historyRecording(s_.root()->path())));
 }
 
 void App::setModelRoot(Node *root)
@@ -2152,6 +2287,7 @@ void App::renderTreemap()
 {
     const int scale = gtk_widget_get_scale_factor(area_);
     tm_.setColorMode(colorByAge() ? ColorMode::Age : ColorMode::Extension);
+    tm_.setShape(boolState("sunburst") ? MapShape::Rings : MapShape::Rectangles);
     tm_.render(tmRoot_, gtk_widget_get_allocated_width(area_) * scale, gtk_widget_get_allocated_height(area_) * scale,
                s_.apparent, s_.colors);
     composeTreemap();
@@ -2202,10 +2338,12 @@ void App::showMenu(Node *n, GtkWidget *widget, double x, double y, void *event)
     menuNode_ = n;
     GMenu *menu = g_menu_new();
     GMenu *s1 = g_menu_new();
-    g_menu_append(s1, T("Open"), "win.node-open");
-    g_menu_append(s1, T("Show in file manager"), "win.node-reveal");
+    if (local()) {
+        g_menu_append(s1, T("Open"), "win.node-open");
+        g_menu_append(s1, T("Show in file manager"), "win.node-reveal");
+    }
     g_menu_append(s1, T("Copy path"), "win.node-copy");
-    if (havePacman() && !(n->flags & F_GROUP))
+    if (local() && havePacman() && !(n->flags & F_GROUP))
         g_menu_append(s1, T("Which package owns this?"), "win.node-package");
     g_menu_append_section(menu, nullptr, G_MENU_MODEL(s1));
     if (n->isDir) {
@@ -2219,7 +2357,7 @@ void App::showMenu(Node *n, GtkWidget *widget, double x, double y, void *event)
         g_menu_append_section(menu, nullptr, G_MENU_MODEL(s2));
         g_object_unref(s2);
     }
-    if (n->parent) {
+    if (n->parent && local()) {
         GMenu *s3 = g_menu_new();
         g_menu_append(s3, T("Move to trash"), "win.node-trash");
         g_menu_append(s3, T("Delete permanently…"), "win.node-delete");
@@ -2292,6 +2430,10 @@ void App::deleteNode(Node *n, bool permanent)
 {
     if (!n->parent || s_.scanning())
         return;
+    if (!local()) {
+        showError(GTK_WINDOW(win_), "TuxDirStat", T("This scan is from another computer or a snapshot of one; its files cannot be deleted from here."));
+        return;
+    }
     const std::string path = n->path();
     const std::string kind = (n->flags & F_GROUP) ? TF("the %1 files in this group", {fmtInt(n->files)})
                              : n->isDir           ? T("this folder")
@@ -2311,6 +2453,8 @@ void App::deleteNode(Node *n, bool permanent)
 
 bool App::removeNow(Node *n, bool permanent, std::string *errOut)
 {
+    if (!local())
+        return false;
     std::string err, firstFailed;
     int failed = 0;
     for (const std::string &p : diskPaths(n)) {
@@ -2368,7 +2512,12 @@ void App::finishDelete(Node *n)
 
 bool App::colorByAge()
 {
-    GAction *a = g_action_map_lookup_action(G_ACTION_MAP(win_), "age");
+    return boolState("age");
+}
+
+bool App::boolState(const char *action)
+{
+    GAction *a = g_action_map_lookup_action(G_ACTION_MAP(win_), action);
     if (!a)
         return false;
     GVariant *v = g_action_get_state(a);
@@ -2437,7 +2586,7 @@ void App::showTable(ResultTable table)
             gtk_button_set_label(GTK_BUTTON(bCopy), one && !one->command.empty() ? T("Copy command") : T("Copy path"));
             bool del = !rows.empty();
             for (int r : rows)
-                del = del && t.rows[size_t(r)].deletable && !t.rows[size_t(r)].path.empty();
+                del = del && t.rows[size_t(r)].deletable && t.rows[size_t(r)].path.rfind('/', 0) == 0;
             gtk_widget_set_sensitive(bTrash, del);
         }
         void showInTree()
@@ -2669,9 +2818,9 @@ void App::showTable(ResultTable table)
     present(c->win);
 }
 
-void App::runTool(const char *title, std::function<void(Job &)> fn)
+void App::runTool(const char *title, std::function<void(Job &)> fn, bool needsTree)
 {
-    if (!toolReady())
+    if (needsTree ? !toolReady() : s_.scanning())
         return;
     struct P {
         App *app;
@@ -2827,6 +2976,43 @@ void App::exportCsvDialog()
                      return;
                  std::string err;
                  if (!exportCsv(s_.root(), f, &err))
+                     showError(GTK_WINDOW(win_), T("Could not write the file:"), err);
+                 else
+                     gtk_label_set_text(GTK_LABEL(statusL_), TF("Exported: %1", {f}).c_str());
+             });
+}
+
+void App::exportHtmlDialog()
+{
+    if (!toolReady())
+        return;
+    std::string name = s_.root()->path();
+    name = name.substr(name.rfind('/') + 1);
+    pickFile(GTK_WINDOW(win_), T("Export HTML report"), true, (name.empty() ? "root" : name) + "-report.html", T("HTML files"),
+             {"*.html"}, [this](const std::string &f) {
+                 if (!s_.root() || s_.scanning())
+                     return;
+                 std::string err;
+                 if (!exportHtml(s_.root(), f, s_.apparent, &err))
+                     showError(GTK_WINDOW(win_), T("Could not write the file:"), err);
+                 else
+                     gtk_label_set_text(GTK_LABEL(statusL_), TF("Exported: %1", {f}).c_str());
+             });
+}
+
+void App::exportPngDialog()
+{
+    if (!toolReady())
+        return;
+    pickFile(GTK_WINDOW(win_), T("Save map as image"), true, "tuxdirstat.png", T("PNG images"), {"*.png"},
+             [this](const std::string &f) {
+                 if (!s_.root() || s_.scanning())
+                     return;
+                 const bool ring = boolState("sunburst");
+                 std::string err;
+                 if (!exportMapPng(tmRoot_ ? tmRoot_ : s_.root(), f, 1600, ring ? 1600 : 1000, s_.apparent,
+                                   colorByAge() ? ColorMode::Age : ColorMode::Extension,
+                                   ring ? MapShape::Rings : MapShape::Rectangles, &err))
                      showError(GTK_WINDOW(win_), T("Could not write the file:"), err);
                  else
                      gtk_label_set_text(GTK_LABEL(statusL_), TF("Exported: %1", {f}).c_str());

@@ -1,6 +1,8 @@
 // Çekirdek birim testleri: tarama, toplamlar, sıralama, gruplama, silme ve rapor.
 // Çalıştırma: cmake -DTUXDIRSTAT_TESTS=ON … && ctest --test-dir build
 
+#include "treemap_render.h"
+#include <iterator>
 #include <chrono>
 #include <clocale>
 #include <cstdio>
@@ -232,6 +234,113 @@ static void toolTests(const std::string &dir)
     ::unlink(csv.c_str());
 }
 
+// 1.5: remote scans, PNG/HTML export, sunburst, gzip snapshots, history, languages
+static void newTests(const std::string &dir)
+{
+    std::string host, rpath, err;
+    CHECK(parseRemote("pi:/home", host, rpath) && host == "pi" && rpath == "/home");
+    CHECK(parseRemote("user@nas.local:~/media", host, rpath) && host == "user@nas.local" && rpath == "~/media");
+    CHECK(parseRemote("ssh://box/srv/data", host, rpath) && host == "box" && rpath == "/srv/data");
+    CHECK(parseRemote("pi:", host, rpath) && rpath == "~");
+    CHECK(!parseRemote("/home/a:b", host, rpath));
+    CHECK(!parseRemote("relative/x:/y", host, rpath));
+    CHECK(!parseRemote("-oProxyCommand=x:/y", host, rpath));  // never an ssh option
+    CHECK(!parseRemote("C:\\x", host, rpath));
+    CHECK(!removePath("pi:/home/x", &err) && !err.empty());   // remote paths are never deleted
+
+    // Remote scan through a fake ssh that runs the command locally (GNU find fallback).
+    const std::string bin = dir + "/fakebin";
+    ::mkdir(bin.c_str(), 0755);
+    {
+        std::ofstream f(bin + "/ssh");
+        f << "#!/bin/sh\nwhile [ $# -gt 0 ]; do case $1 in -o) shift 2 ;; --) shift; break ;; *) break ;; esac; done\n"
+             "shift\nexec sh -c \"$*\"\n";
+    }
+    ::chmod((bin + "/ssh").c_str(), 0755);
+    const std::string oldPath = std::getenv("PATH") ? std::getenv("PATH") : "";
+    setenv("PATH", (bin + ":" + oldPath).c_str(), 1);
+    auto local = scan(dir + "/content");
+    auto remote = remoteScan("testhost:" + dir + "/content", true, &err);
+    CHECK(remote && local && sameTotals(remote->root, local->root));
+    CHECK(remote && !isLocalTree(remote->root) && remote->root->path() == "testhost:" + dir + "/content");
+    CHECK(remote && consistent(remote->root) && child(remote->root, "big.pak") && child(remote->root, "big.pak")->alloc > 0);
+    CHECK(!remoteScan("testhost:" + dir + "/does-not-exist", true, &err) && !err.empty());
+    setenv("PATH", oldPath.c_str(), 1);
+    CHECK(isLocalTree(local->root));
+
+    // PNG: signature, header and pixel data survive a zlib round trip.
+    const uint32_t px[4] = {0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFFFF};
+    std::string png;
+    CHECK(encodePng(px, 2, 2, png) && png.compare(0, 8, "\x89PNG\r\n\x1a\n", 8) == 0);
+    CHECK(png.size() > 8 + 25 && png.compare(12, 4, "IHDR") == 0 && uint8_t(png[19]) == 2 && uint8_t(png[23]) == 2);
+
+    // Sunburst: the center is the root, rings are its children; outlines draw.
+    TreemapRenderer r;
+    r.setShape(MapShape::Rings);
+    std::vector<RGBf> colors;
+    computeExtColors(computeExtStats(local->root), false, colors, nullptr);
+    r.render(local->root, 400, 300, false, colors);
+    CHECK(r.hit(200, 150) == local->root);
+    Node *ring = r.hit(200, 150 - 70);
+    CHECK(ring && ring->parent == local->root);
+    CHECK(r.hit(2, 2) == nullptr);  // corner: outside the rings
+    std::vector<uint32_t> outPx;
+    r.compose(outPx, -1, ring);
+    CHECK(outPx.size() == 400u * 300u && std::count(outPx.begin(), outPx.end(), 0xFFFFFFFFu) > 10);
+
+    // gzip snapshot and HTML report
+    const std::string gz = dir + "/snap.json.gz";
+    CHECK(saveSnapshot(local->root, gz, &err));
+    {
+        std::ifstream f(gz, std::ios::binary);
+        char magic[2] = {};
+        f.read(magic, 2);
+        CHECK(uint8_t(magic[0]) == 0x1f && uint8_t(magic[1]) == 0x8b);
+    }
+    auto back = loadSnapshot(gz, &err);
+    CHECK(back && sameTotals(back->root, local->root));
+    const std::string html = dir + "/report.html";
+    CHECK(exportHtml(local->root, html, false, &err));
+    {
+        std::ifstream f(html);
+        const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        CHECK(text.rfind("<!DOCTYPE html>", 0) == 0 && text.find("data:image/png;base64,") != std::string::npos);
+        CHECK(text.find("big.pak") != std::string::npos && text.find("</html>") != std::string::npos);
+    }
+    CHECK(exportMapPng(local->root, dir + "/map.png", 320, 200, false, ColorMode::Age, MapShape::Rectangles, &err));
+
+    // Size history in a private XDG data folder
+    setenv("XDG_DATA_HOME", (dir + "/xdg-data").c_str(), 1);
+    setenv("XDG_CACHE_HOME", (dir + "/xdg-cache").c_str(), 1);
+    CHECK(recordHistorySnapshot(local->root, &err));
+    auto files = historyFiles(local->root->path());
+    CHECK(files.size() == 1);
+    if (files.size() == 1) {
+        const std::string old = files[0].second.substr(0, files[0].second.rfind('/')) + "/2026-01-05.json.gz";
+        CHECK(std::rename(files[0].second.c_str(), old.c_str()) == 0);
+    }
+    writeFile(dir + "/content/grown.bin", 400000);
+    auto now = scan(dir + "/content");
+    Job hj("h", [](Job &) {});
+    ResultTable h = historyGrowth(now->root, false, hj);
+    CHECK(h.rows.size() >= 2 && h.rows[0].node == now->root);
+    bool grew = false;
+    for (const ResultRow &row : h.rows)
+        grew |= row.cells[0] == "grown.bin" && row.cells.back() == "▁█";
+    CHECK(grew);
+    CHECK(!recordHistorySnapshot(remote ? remote->root : nullptr, &err) || !remote);
+    CHECK(saveLastScan(now->root, &err));
+    auto last = loadSnapshot(lastScanFile(), &err);
+    CHECK(last && sameTotals(last->root, now->root));
+
+    // Languages come from po/*.po
+    auto langs = i18n::languages();
+    CHECK(langs.size() >= 2 && langs[0].code == "en" &&
+          std::any_of(langs.begin(), langs.end(), [](const i18n::Language &l) { return l.code == "tr" && l.name == "Türkçe"; }));
+    CHECK(i18n::known("tr") && !i18n::known("xx"));
+    CHECK(std::string(i18n::dateFormat()) == "%d.%m.%Y %H:%M");
+}
+
 int main()
 {
     i18n::init("tr");
@@ -382,6 +491,7 @@ int main()
     CHECK(fmtPct(0.125) == "12,5 %");
 
     toolTests(dir);
+    newTests(dir);
 
     removePath(dir, nullptr);
     if (failures)

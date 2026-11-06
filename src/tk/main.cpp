@@ -1,6 +1,8 @@
 // TuxDirStat — Tk arayüzü. Yerleşim gömülü Tcl betiğinde, veri işlemleri C++'ta (`dt` komutu).
 // Kullanım: tuxdirstat-tk [klasör]
 
+#include <sys/stat.h>
+#include <unistd.h>
 #include <tcl.h>
 #include <tk.h>
 #include <gio/gio.h>
@@ -62,6 +64,10 @@ set ::groupmin 16
 set ::theme system
 set ::lang system
 set ::age 0
+set ::sunburst 0
+set ::openlast 1
+set ::record 0
+set ::remote ""
 set ::asadmin 0
 set ::showtm 1
 set ::statusL ""
@@ -86,6 +92,9 @@ ttk::menubutton .tb.file -text [T "File"] -menu .tb.file.m
 menu .tb.file.m
 .tb.file.m add command -label [T "Open snapshot…"] -command {dt act opensnap}
 .tb.file.m add command -label [T "Save snapshot…"] -command {dt act savesnap} -accelerator Ctrl+S
+.tb.file.m add separator
+.tb.file.m add command -label [T "Export HTML report…"] -command {dt act html}
+.tb.file.m add command -label [T "Save map as image…"] -command {dt act png}
 .tb.file.m add command -label [T "Export as CSV…"] -command {dt act csv}
 ttk::menubutton .tb.tools -text [T "Tools"] -menu .tb.tools.m
 menu .tb.tools.m
@@ -95,12 +104,18 @@ menu .tb.tools.m
 .tb.tools.m add separator
 .tb.tools.m add command -label [T "Usage by owner"] -command {dt act owners}
 .tb.tools.m add command -label [T "Files no package owns…"] -command {dt act unowned}
+.tb.tools.m add command -label [T "Installed packages…"] -command {dt act packages}
+.tb.tools.m add command -label [T "Btrfs: shared and compressed data…"] -command {dt act btrfs}
 .tb.tools.m add separator
 .tb.tools.m add command -label [T "Compare with snapshot…"] -command {dt act compare}
+.tb.tools.m add command -label [T "Size history…"] -command {dt act history}
+.tb.tools.m add checkbutton -label [T "Record size history weekly"] -variable ::record -command {dt act record}
 ttk::menubutton .tb.theme -text [T "View"] -menu .tb.theme.m
 menu .tb.theme.m
 .tb.theme.m add checkbutton -label [T "Treemap"] -variable ::showtm -command toggleTreemap -accelerator F9
+.tb.theme.m add checkbutton -label [T "Sunburst"] -variable ::sunburst -command {dt act sunburst} -accelerator F7
 .tb.theme.m add checkbutton -label [T "Color by age"] -variable ::age -command {dt act age} -accelerator F8
+.tb.theme.m add checkbutton -label [T "Reopen the last scan at start"] -variable ::openlast -command {dt act openlast}
 menu .tb.theme.m.gmin
 foreach n {8 16 32 64 128} {
     .tb.theme.m.gmin add radiobutton -label [format [T "At least %s items"] $n] -variable ::groupmin -value $n -command {dt act groupmin}
@@ -113,7 +128,7 @@ foreach {id label} [list system [T "System"] light [T "Light"] dark [T "Dark"]] 
 }
 .tb.theme.m add separator
 .tb.theme.m add command -label [T "Language"] -state disabled
-foreach {id label} [list system [T "System"] en English tr Türkçe] {
+foreach {id label} [concat [list system [T "System"]] [dt languages]] {
     .tb.theme.m add radiobutton -label $label -variable ::lang -value $id -command {dt act lang}
 }
 ttk::button .tb.about -text [T "About"] -command {dt act about}
@@ -284,17 +299,20 @@ bind . <Control-plus> {dt act zoomin}
 bind . <Control-f> {dt act find}
 bind . <Control-s> {dt act savesnap}
 bind . <F8> {set ::age [expr {!$::age}]; dt act age}
+bind . <F7> {set ::sunburst [expr {!$::sunburst}]; dt act sunburst}
 bind . <F9> {set ::showtm [expr {!$::showtm}]; toggleTreemap}
 bind . <Control-g> {set ::group [expr {!$::group}]; dt act group}
 
-proc showMenu {X Y isDir isMount isGroup hasParent busy pacman} {
+proc showMenu {X Y isDir isMount isGroup hasParent busy pacman local} {
     destroy .ctx
     menu .ctx
     set st [expr {$busy ? "disabled" : "normal"}]
-    .ctx add command -label [T "Open"] -command {dt nact open}
-    .ctx add command -label [T "Show in file manager"] -command {dt nact reveal}
+    if {$local} {
+        .ctx add command -label [T "Open"] -command {dt nact open}
+        .ctx add command -label [T "Show in file manager"] -command {dt nact reveal}
+    }
     .ctx add command -label [T "Copy path"] -command {dt nact copy}
-    if {$pacman && !$isGroup} {
+    if {$local && $pacman && !$isGroup} {
         .ctx add command -label [T "Which package owns this?"] -command {dt nact package}
     }
     if {$isDir} {
@@ -303,7 +321,7 @@ proc showMenu {X Y isDir isMount isGroup hasParent busy pacman} {
         set lbl [expr {$isGroup ? [T "Rescan its folder"] : $isMount ? [T "Scan this file system too"] : [T "Rescan this folder"]}]
         .ctx add command -label $lbl -command {dt nact refresh} -state $st
     }
-    if {$hasParent} {
+    if {$hasParent && $local} {
         .ctx add separator
         .ctx add command -label [T "Move to trash"] -command {dt nact trash} -state $st
         .ctx add command -label [T "Delete permanently…"] -command {dt nact delete} -state $st
@@ -332,28 +350,35 @@ proc startDialog {} {
     toplevel $w
     wm title $w "TuxDirStat — [T {Location to scan}]"
     wm transient $w .
-    wm geometry $w 720x420
+    wm geometry $w 860x440
     ttk::frame $w.f -padding 10
     pack $w.f -fill both -expand 1
     ttk::label $w.f.l -text [T "Choose what to scan:"]
-    ttk::treeview $w.f.t -columns {fs used total pct} -show {tree headings} -selectmode browse
+    ttk::treeview $w.f.t -columns {fs used free total pct} -show {tree headings} -selectmode browse
     $w.f.t heading #0 -text [T "Location"] -anchor w
     $w.f.t heading fs -text [T "Type"] -anchor w
     $w.f.t heading used -text [T "Used"] -anchor e
+    $w.f.t heading free -text [T "Free"] -anchor e
     $w.f.t heading total -text [T "Total"] -anchor e
     $w.f.t heading pct -text [T "Usage"] -anchor w
     $w.f.t column #0 -width 280
     $w.f.t column fs -width 80 -stretch 0
     $w.f.t column used -width 90 -anchor e -stretch 0
+    $w.f.t column free -width 90 -anchor e -stretch 0
     $w.f.t column total -width 90 -anchor e -stretch 0
     $w.f.t column pct -width 150 -stretch 0
     foreach d [dt drives] {
-        lassign $d label path fs used total pct
-        $w.f.t insert {} end -text $label -values [list $fs $used $total $pct] -tags [list $path]
+        lassign $d label path fs used free total pct
+        $w.f.t insert {} end -text $label -values [list $fs $used $free $total $pct] -tags [list $path]
     }
     set first [lindex [$w.f.t children {}] 0]
     $w.f.t selection set $first
     $w.f.t focus $first
+    ttk::frame $w.f.r
+    ttk::label $w.f.r.l -text [T "Other computer (SSH):"]
+    ttk::entry $w.f.r.e -textvariable ::remote
+    pack $w.f.r.l -side left
+    pack $w.f.r.e -side left -fill x -expand 1 -padx {8 0}
     ttk::checkbutton $w.f.admin -text [T "Scan as administrator (read-only, asks for your password)"] -variable ::asadmin
     ttk::frame $w.f.b
     ttk::button $w.f.b.pick -text [T "Choose folder…"] -command {
@@ -367,6 +392,7 @@ proc startDialog {} {
     pack $w.f.l -anchor w -pady {0 6}
     pack $w.f.b -side bottom -fill x -pady {8 0}
     pack $w.f.admin -side bottom -anchor w -pady {6 0}
+    pack $w.f.r -side bottom -fill x -pady {6 0}
     pack $w.f.t -fill both -expand 1
     bind $w.f.t <Double-1> startDialogAccept
     bind $w <Return> startDialogAccept
@@ -375,6 +401,16 @@ proc startDialog {} {
 }
 
 proc startDialogAccept {} {
+    set r [string trim $::remote]
+    if {$r ne ""} {
+        if {![dt isremote $r]} {
+            showError [T "Write the remote location as host:/path, e.g. pi:/home"] ""
+            return
+        }
+        destroy .start
+        dt scan $r 0
+        return
+    }
     set sel [.start.f.t selection]
     if {$sel eq ""} return
     set path [lindex [.start.f.t item $sel -tags] 0]
@@ -551,6 +587,11 @@ public:
     void startPrivilegedScan(const std::string &path);
     void openSnapshot(const std::string &file);
     void showStartDialog() { eval("startDialog"); }
+    void openLast()
+    {
+        openedLast_ = true;
+        openSnapshot(lastScanFile());
+    }
 
 private:
     // Tcl yardımcıları
@@ -614,10 +655,13 @@ private:
     void showTable(ResultTable t);
     void resAction(const std::string &what);
     std::vector<int> resSelected();
-    void runTool(const char *title, std::function<void(Job &)> fn);
+    void runTool(const char *title, std::function<void(Job &)> fn, bool needsTree = true);
+    bool local() const { return isLocalTree(s_.root()); }
+    bool openedLast_ = false;
     static void jobTimer(ClientData cd);
     void jobPoll();
-    std::string chooseFile(bool save, const std::string &title, const std::string &initial, bool csv);
+    // kind: 0 snapshot, 1 CSV, 2 HTML, 3 PNG
+    std::string chooseFile(bool save, const std::string &title, const std::string &initial, int kind);
     bool colorByAge() { return varBool("::age"); }
     ResultTable table_;
     std::vector<bool> gone_;
@@ -664,7 +708,9 @@ int TkApp::call(std::initializer_list<Tcl_Obj *> objs)
 
 void TkApp::startScan(const std::string &path, Node *target)
 {
-    char *real = realpath(path.c_str(), nullptr);
+    openedLast_ = false;
+    std::string host, rpath;
+    char *real = parseRemote(path, host, rpath) ? nullptr : realpath(path.c_str(), nullptr);
     const std::string abs = real ? real : path;
     std::free(real);
     s_.oneFs = varBool("::onefs");
@@ -761,7 +807,15 @@ void TkApp::poll()
         return;
     }
     afterChange();
-    setVar("::statusL", TF("Done: %1 items in %2 s.", {fmtInt(s_.lastCount()), fmtDecimal(s_.elapsed(), 2)}));
+    setVar("::record", local() && historyRecording(s_.root()->path()) ? "1" : "0");
+    std::string done = TF("Done: %1 items in %2 s.", {fmtInt(s_.lastCount()), fmtDecimal(s_.elapsed(), 2)});
+    if (openedLast_) {
+        openedLast_ = false;
+        struct stat sb;
+        if (::stat(lastScanFile().c_str(), &sb) == 0)
+            done = TF("Showing the saved scan from %1. Press F5 to scan again.", {fmtTime(sb.st_mtime)});
+    }
+    setVar("::statusL", done);
 }
 
 // ───────────── ağaç ─────────────
@@ -1004,6 +1058,7 @@ void TkApp::render()
     int w = 0, h = 0;
     std::sscanf(result().c_str(), "%d %d", &w, &h);
     tm_.setColorMode(colorByAge() ? ColorMode::Age : ColorMode::Extension);
+    tm_.setShape(varBool("::sunburst") ? MapShape::Rings : MapShape::Rectangles);
     tm_.render(tmRoot_, w, h, s_.apparent, s_.colors);
     compose();
 }
@@ -1111,6 +1166,66 @@ void TkApp::action(const std::string &a)
         scheduleRender(0);
         call({S("showLegend"), S(colorByAge() ? "1" : "0")});
         saveSettings();
+    } else if (a == "sunburst") {
+        tm_.forgetNodes();
+        scheduleRender(0);
+        saveSettings();
+    } else if (a == "openlast") {
+        if (!varBool("::openlast"))
+            ::unlink(lastScanFile().c_str());
+        saveSettings();
+    } else if (a == "record") {
+        if (!local()) {
+            setVar("::record", "0");
+        } else {
+            const bool on = varBool("::record");
+            const std::string path = s_.root()->path();
+            std::string err;
+            bool ok = setHistoryRecording(path, on, &err);
+            if (ok && on)
+                ok = recordHistorySnapshot(s_.root(), &err);
+            if (!ok)
+                call({S("showError"), S(err), S("")});
+            else
+                setVar("::statusL", on ? TF("The size of %1 is now recorded every week.", {path}) : TF("Stopped recording %1.", {path}));
+            setVar("::record", historyRecording(path) ? "1" : "0");
+        }
+    } else if (a == "packages") {
+        runTool(T("Installed packages"), [](Job &j) { j.result = packageSizes(j); }, false);
+    } else if (a == "btrfs") {
+        Node *root = s_.root();
+        runTool(T("Btrfs: shared and compressed data"), [root](Job &j) { j.result = btrfsUsage(root, j); });
+    } else if (a == "history") {
+        Node *root = s_.root();
+        const bool ap = s_.apparent;
+        runTool(T("Size history"), [root, ap](Job &j) { j.result = historyGrowth(root, ap, j); });
+    } else if (a == "html") {
+        if (toolReady()) {
+            std::string name = s_.root()->path();
+            name = name.substr(name.rfind('/') + 1);
+            const std::string f = chooseFile(true, T("Export HTML report"), (name.empty() ? "root" : name) + "-report.html", 2);
+            std::string err;
+            if (!f.empty()) {
+                if (!exportHtml(s_.root(), f, s_.apparent, &err))
+                    call({S("showError"), S(T("Could not write the file:")), S(err)});
+                else
+                    setVar("::statusL", TF("Exported: %1", {f}));
+            }
+        }
+    } else if (a == "png") {
+        if (toolReady()) {
+            const std::string f = chooseFile(true, T("Save map as image"), "tuxdirstat.png", 3);
+            const bool ring = varBool("::sunburst");
+            std::string err;
+            if (!f.empty()) {
+                if (!exportMapPng(tmRoot_ ? tmRoot_ : s_.root(), f, 1600, ring ? 1600 : 1000, s_.apparent,
+                                  colorByAge() ? ColorMode::Age : ColorMode::Extension,
+                                  ring ? MapShape::Rings : MapShape::Rectangles, &err))
+                    call({S("showError"), S(T("Could not write the file:")), S(err)});
+                else
+                    setVar("::statusL", TF("Exported: %1", {f}));
+            }
+        }
     } else if (a == "lang") {
         saveSettings();
         call({S("showInfo"), S(T("The new language is used after TuxDirStat is restarted."))});
@@ -1190,6 +1305,12 @@ void TkApp::action(const std::string &a)
                   "in the treemap.") +
                 "\n\n" + T("License: GPL-3.0-or-later") + "\nhttps://github.com/Gubir34/TuxDirStat")});
     } else if (a == "quit") {
+        if (varBool("::openlast") && !s_.scanning() && local()) {
+            setVar("::statusL", T("Saving the scan for next time…"));
+            eval("update idletasks");
+            std::string err;
+            saveLastScan(s_.root(), &err);
+        }
         s_.cancelScan();
         if (pollToken_)
             Tcl_DeleteTimerHandler(pollToken_);
@@ -1205,9 +1326,9 @@ void TkApp::nodeAction(const std::string &a)
     Node *n = menuNode_;
     if (!n)
         return;
-    if (a == "open")
+    if (a == "open" && local())
         openPath(n->path());
-    else if (a == "reveal")
+    else if (a == "reveal" && local())
         revealPath(n->path());
     else if (a == "copy")
         copyPath(n);
@@ -1226,7 +1347,7 @@ void TkApp::popupMenu(Node *n, int X, int Y)
     menuNode_ = n;
     call({S("showMenu"), Tcl_NewIntObj(X), Tcl_NewIntObj(Y), Tcl_NewIntObj(n->isDir), Tcl_NewIntObj((n->flags & F_MOUNT) != 0),
           Tcl_NewIntObj((n->flags & F_GROUP) != 0), Tcl_NewIntObj(n->parent != nullptr), Tcl_NewIntObj(s_.scanning()),
-          Tcl_NewIntObj(havePacman())});
+          Tcl_NewIntObj(havePacman()), Tcl_NewIntObj(local())});
 }
 
 void TkApp::copyPath(Node *n)
@@ -1279,6 +1400,10 @@ void TkApp::deleteNode(Node *n, bool permanent)
 {
     if (!n->parent || s_.scanning())
         return;
+    if (!local()) {
+        call({S("showError"), S(T("This scan is from another computer or a snapshot of one; its files cannot be deleted from here.")), S("")});
+        return;
+    }
     const std::string path = n->path();
     const std::string kind = (n->flags & F_GROUP) ? TF("the %1 files in this group", {fmtInt(n->files)})
                              : n->isDir           ? T("this folder")
@@ -1295,6 +1420,8 @@ void TkApp::deleteNode(Node *n, bool permanent)
 
 bool TkApp::removeNow(Node *n, bool permanent, std::string *errOut)
 {
+    if (!local())
+        return false;
     std::string err, firstFailed;
     int failed = 0;
     for (const std::string &p : diskPaths(n)) {
@@ -1352,7 +1479,7 @@ bool TkApp::toolReady()
     return true;
 }
 
-std::string TkApp::chooseFile(bool save, const std::string &title, const std::string &initial, bool csv)
+std::string TkApp::chooseFile(bool save, const std::string &title, const std::string &initial, int kind)
 {
     Tcl_Obj *types = Tcl_NewListObj(0, nullptr);
     auto addType = [&](const char *name, std::initializer_list<const char *> pats) {
@@ -1364,8 +1491,12 @@ std::string TkApp::chooseFile(bool save, const std::string &title, const std::st
         Tcl_ListObjAppendElement(nullptr, t, p);
         Tcl_ListObjAppendElement(nullptr, types, t);
     };
-    if (csv)
+    if (kind == 1)
         addType(T("CSV files"), {".csv"});
+    else if (kind == 2)
+        addType(T("HTML files"), {".html"});
+    else if (kind == 3)
+        addType(T("PNG images"), {".png"});
     else
         addType(T("Snapshots (JSON)"), {".json", ".gz", ".zst", ".xz"});
     addType(T("All files"), {"*"});
@@ -1476,7 +1607,7 @@ void TkApp::resAction(const std::string &what)
         call({S(".res.f.b.copy"), S("configure"), S("-text"), S(one && !one->command.empty() ? T("Copy command") : T("Copy path"))});
         bool del = !rows.empty();
         for (int r : rows)
-            del = del && table_.rows[size_t(r)].deletable && !table_.rows[size_t(r)].path.empty();
+            del = del && table_.rows[size_t(r)].deletable && table_.rows[size_t(r)].path.rfind('/', 0) == 0;
         state("trash", del);
     } else if (what == "show") {
         if (one && one->node && root && one->node->isWithin(root)) {
@@ -1536,9 +1667,9 @@ void TkApp::resAction(const std::string &what)
     }
 }
 
-void TkApp::runTool(const char *title, std::function<void(Job &)> fn)
+void TkApp::runTool(const char *title, std::function<void(Job &)> fn, bool needsTree)
 {
-    if (!toolReady() || job_)
+    if ((needsTree ? !toolReady() : s_.scanning()) || job_)
         return;
     job_ = std::make_unique<Job>(title, std::move(fn));
     call({S("jobDialog"), S(title)});
@@ -1597,6 +1728,8 @@ void TkApp::applySettings()
     setVar("::theme", st.theme);
     setVar("::lang", st.language);
     setVar("::age", st.colorByAge ? "1" : "0");
+    setVar("::sunburst", st.sunburst ? "1" : "0");
+    setVar("::openlast", st.openLast ? "1" : "0");
     call({S("applyPalette"), S(wantsDark(st.theme) ? "1" : "0")});
     Tcl_Obj *legend = Tcl_NewListObj(0, nullptr);
     for (const AgeBucket &b : ageBuckets()) {
@@ -1625,6 +1758,8 @@ void TkApp::saveSettings()
     if (const char *l = Tcl_GetVar(in_, "::lang", TCL_GLOBAL_ONLY))
         st.language = l;
     st.colorByAge = varBool("::age");
+    st.sunburst = varBool("::sunburst");
+    st.openLast = varBool("::openlast");
     st.save();
 }
 
@@ -1643,6 +1778,15 @@ int TkApp::command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[
 
     if (sub == "tr") {
         Tcl_SetObjResult(in, S(T(Tcl_GetString(objv[2]))));
+        return TCL_OK;
+    }
+    if (sub == "languages") {  // code name code name …
+        Tcl_Obj *l = Tcl_NewListObj(0, nullptr);
+        for (const i18n::Language &lang : i18n::languages()) {
+            Tcl_ListObjAppendElement(in, l, S(lang.code));
+            Tcl_ListObjAppendElement(in, l, S(lang.name));
+        }
+        Tcl_SetObjResult(in, l);
         return TCL_OK;
     }
     if (sub == "open") {
@@ -1710,12 +1854,15 @@ int TkApp::command(ClientData cd, Tcl_Interp *in, int objc, Tcl_Obj *const objv[
             Tcl_ListObjAppendElement(nullptr, list, r);
         };
         const std::string home = homeDir();
-        row({TF("Home folder  (%1)", {home}), home, "", "", "", ""});
+        row({TF("Home folder  (%1)", {home}), home, "", "", "", "", ""});
         for (const Drive &d : listDrives()) {
             const double f = double(d.used) / double(d.total);
-            row({d.mp, d.mp, d.fs, fmtSize(d.used), fmtSize(d.total), textBar(f) + " " + fmtPct(f)});
+            row({d.mp, d.mp, d.fs, fmtSize(d.used), fmtSize(d.avail), fmtSize(d.total), textBar(f) + " " + fmtPct(f)});
         }
         Tcl_SetObjResult(in, list);
+    } else if (sub == "isremote") {
+        std::string host, rpath;
+        Tcl_SetObjResult(in, Tcl_NewBooleanObj(parseRemote(arg(2), host, rpath)));
     } else if (sub == "home") {
         Tcl_SetObjResult(in, S(homeDir()));
     } else if (sub == "scan") {
@@ -1772,6 +1919,8 @@ int main(int argc, char **argv)
         app->openSnapshot(path);
     else if (!path.empty())
         app->startScan(path);
+    else if (Settings::load().openLast && g_file_test(lastScanFile().c_str(), G_FILE_TEST_IS_REGULAR))
+        app->openLast();
     else
         app->showStartDialog();
     Tk_MainLoop();

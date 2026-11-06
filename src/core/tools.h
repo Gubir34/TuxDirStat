@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -96,10 +97,14 @@ ResultTable findUnowned(Node *root, bool apparent, Job &job);
 
 // ───────────── anlık görüntü (ncdu JSON dışa aktarım biçimi) ─────────────
 
+// file "-" writes to standard output; a name ending in .gz is gzip-compressed.
 bool saveSnapshot(const Node *root, const std::string &file, std::string *err);
 // .gz / .zst / .xz uzantılı dosyalar açılmadan önce ilgili araçla çözülür.
 std::unique_ptr<Tree> loadSnapshot(const std::string &file, std::string *err, int64_t *timestamp = nullptr,
                                    const std::atomic<bool> *cancel = nullptr);
+// Snapshot already read into memory (JSON text).
+std::unique_ptr<Tree> parseSnapshot(const std::string &data, std::string *err, int64_t *timestamp = nullptr,
+                                    const std::atomic<bool> *cancel = nullptr);
 ResultTable compareTrees(Node *root, Node *old, int64_t oldTime, bool apparent, size_t limit = 1000);
 ResultTable compareWithSnapshot(Node *root, const std::string &file, bool apparent, Job &job);
 
@@ -107,3 +112,66 @@ bool exportCsv(const Node *root, const std::string &file, std::string *err);
 
 // Bir düğümün grupları açılmış gerçek çocukları.
 void realChildren(const Node *n, std::vector<Node *> &out);
+
+// ───────────── output files and images ─────────────
+
+// "-" is standard output; names ending in .gz are compressed. Close with closeOutput().
+std::FILE *openOutput(const std::string &file, std::string *err);
+bool closeOutput(std::FILE *f, std::string *err);
+bool encodePng(const uint32_t *pixels, int w, int h, std::string &png);  // 0xFFRRGGBB pixels
+bool writePng(const std::string &file, const uint32_t *pixels, int w, int h, std::string *err);
+enum class MapShape;
+std::vector<uint32_t> renderMap(Node *root, int w, int h, bool apparent, ColorMode mode, MapShape shape);
+bool exportMapPng(Node *root, const std::string &file, int w, int h, bool apparent, ColorMode mode, MapShape shape,
+                  std::string *err);
+// Self-contained HTML page: totals, treemap and sunburst images, largest items, file types.
+bool exportHtml(Node *root, const std::string &file, bool apparent, std::string *err);
+
+// ───────────── packages (pacman, Flatpak) ─────────────
+
+struct PackageInfo {
+    std::string name, version, description;
+    uint64_t size = 0;
+    bool explicitlyInstalled = false;
+    bool orphan = false;  // installed as a dependency that nothing needs any more
+    int requiredBy = 0;
+};
+std::vector<PackageInfo> pacmanPackages(std::string *err);
+// Installed pacman packages and Flatpak apps/runtimes by size; orphans marked.
+ResultTable packageSizes(Job &job);
+
+// ───────────── btrfs ─────────────
+
+bool isBtrfs(const std::string &path);
+// Shared (snapshots, reflinks) and compressed data under root, per top-level folder and
+// per subvolume. Uses FIEMAP, so it works without root; compsize adds real compressed
+// sizes when run as root.
+ResultTable btrfsUsage(Node *root, Job &job);
+
+// ───────────── remote scans over SSH ─────────────
+
+// "host:/path", "user@host:~/dir" or "ssh://host/path". False for local paths.
+bool parseRemote(const std::string &spec, std::string &host, std::string &path);
+// Runs TuxDirStat 1.5+ on the remote host, or GNU find when it is missing, through
+// ssh with key login. The root is named "host:/path".
+std::unique_ptr<Tree> remoteScan(const std::string &spec, bool oneFs, std::string *err,
+                                 const std::atomic<bool> *cancel = nullptr);
+// True when file operations make sense: the tree's root is a local absolute path.
+bool isLocalTree(const Node *root);
+
+// ───────────── size history and the last scan ─────────────
+
+std::vector<std::string> historyPaths();     // folders recorded weekly
+bool historyRecording(const std::string &path);
+// Adds or removes a folder and installs/enables (or disables) the systemd user timer.
+bool setHistoryRecording(const std::string &path, bool on, std::string *err);
+// Saves the tree as today's history entry for its root folder.
+bool recordHistorySnapshot(const Node *root, std::string *err);
+// --history-record: scans every recorded folder and saves an entry (used by the timer).
+int recordHistory(std::ostream &log);
+std::vector<std::pair<int64_t, std::string>> historyFiles(const std::string &path);  // (time, file), oldest first
+// Size of each top-level folder at each recorded date, with a trend line.
+ResultTable historyGrowth(Node *root, bool apparent, Job &job);
+// Reopened at the next start instead of scanning again.
+std::string lastScanFile();
+bool saveLastScan(const Node *root, std::string *err);

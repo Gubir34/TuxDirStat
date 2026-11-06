@@ -1,4 +1,4 @@
-#compdef tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
+#compdef tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk tuxdirstat-tui
 # zsh completion for TuxDirStat
 
 _arguments -s \
@@ -11,6 +11,14 @@ _arguments -s \
   '--export[save the scan as a snapshot]:snapshot file:_files' \
   '--csv[write every entry to a CSV file]:CSV file:_files' \
   '--compare[compare with an earlier snapshot]:snapshot:_files -g "*.(json|gz|zst|xz|bz2)"' \
+  '--html[HTML report with images]:HTML file:_files' \
+  '--png[treemap image]:PNG file:_files' \
+  '--sunburst[sunburst image]:PNG file:_files' \
+  '--btrfs[data shared with snapshots, compressed data]' \
+  '--history[size history of the folder]' \
+  '--packages[installed packages by size]' \
+  '--history-record[record the sizes of the recorded folders]' \
+  '--size[image size]:size (WxH): ' \
   '--import[read a snapshot instead of scanning]:snapshot:_files -g "*.(json|gz|zst|xz|bz2)"' \
   '--top[rows per report list]:count: ' \
   '--apparent[use apparent size]' \

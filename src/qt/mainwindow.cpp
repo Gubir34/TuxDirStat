@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QDate>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -41,6 +42,7 @@
 #include "extinfo.h"
 #include "resultdialog.h"
 #include "theme.h"
+#include "treemap_render.h"
 #include "treemap.h"
 #include "treemodel.h"
 
@@ -114,11 +116,11 @@ QIcon appIcon()
 TargetDialog::TargetDialog(QWidget *parent) : QDialog(parent)
 {
     setWindowTitle("TuxDirStat — " + QT("Location to scan"));
-    resize(720, 420);
+    resize(900, 460);
     auto *lay = new QVBoxLayout(this);
     lay->addWidget(new QLabel(QT("Choose what to scan:")));
     list_ = new QTreeWidget;
-    list_->setHeaderLabels({QT("Location"), QT("Type"), QT("Used"), QT("Total"), QT("Usage")});
+    list_->setHeaderLabels({QT("Location"), QT("Type"), QT("Used"), QT("Free"), QT("Total"), QT("Usage")});
     list_->setRootIsDecorated(false);
     list_->setAlternatingRowColors(true);
     QStyle *st = style();
@@ -130,23 +132,34 @@ TargetDialog::TargetDialog(QWidget *parent) : QDialog(parent)
     list_->addTopLevelItem(it);
 
     for (const Drive &d : listDrives()) {
-        auto *item = new QTreeWidgetItem({qs(d.mp), qs(d.fs), qs(fmtSize(d.used)), qs(fmtSize(d.total)), ""});
+        auto *item = new QTreeWidgetItem({qs(d.mp), qs(d.fs), qs(fmtSize(d.used)), qs(fmtSize(d.avail)), qs(fmtSize(d.total)), ""});
         item->setToolTip(0, qs(d.src));
         item->setIcon(0, QIcon::fromTheme("drive-harddisk", st->standardIcon(QStyle::SP_DriveHDIcon)));
         item->setData(0, Qt::UserRole, qs(d.mp));
-        item->setTextAlignment(2, Qt::AlignRight | Qt::AlignVCenter);
-        item->setTextAlignment(3, Qt::AlignRight | Qt::AlignVCenter);
+        for (int c : {2, 3, 4})
+            item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
         list_->addTopLevelItem(item);
         auto *bar = new QProgressBar;
         bar->setRange(0, 100);
         bar->setValue(int(d.used * 100 / d.total));
         bar->setMaximumHeight(18);
-        list_->setItemWidget(item, 4, bar);
+        list_->setItemWidget(item, 5, bar);
     }
+    list_->header()->setStretchLastSection(false);
     list_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c : {1, 2, 3, 4})
+        list_->header()->resizeSection(c, c == 1 ? 80 : 90);
+    list_->header()->resizeSection(5, 130);
     list_->setCurrentItem(list_->topLevelItem(0));
     connect(list_, &QTreeWidget::itemDoubleClicked, this, [this] { accept_(); });
     lay->addWidget(list_);
+    auto *rl = new QHBoxLayout;
+    rl->addWidget(new QLabel(QT("Other computer (SSH):")));
+    remote_ = new QLineEdit;
+    remote_->setPlaceholderText(QT("host:/path, e.g. pi:/home"));
+    remote_->setToolTip(QT("Scans a folder on another computer over SSH. Needs key login without a password prompt."));
+    rl->addWidget(remote_, 1);
+    lay->addLayout(rl);
     admin_ = new QCheckBox(QT("Scan as administrator (read-only, asks for your password)"));
     admin_->setToolTip(QT("Reads folders your user cannot open, such as /root or /var/lib. Deleting still uses your own rights."));
     lay->addWidget(admin_);
@@ -170,6 +183,18 @@ TargetDialog::TargetDialog(QWidget *parent) : QDialog(parent)
 
 void TargetDialog::accept_()
 {
+    const QString remote = remote_->text().trimmed();
+    if (!remote.isEmpty()) {
+        std::string host, rpath;
+        if (!parseRemote(remote.toStdString(), host, rpath)) {
+            QMessageBox::warning(this, "TuxDirStat", QT("Write the remote location as host:/path, e.g. pi:/home"));
+            return;
+        }
+        path = remote;
+        admin = false;
+        accept();
+        return;
+    }
     if (auto *it = list_->currentItem()) {
         path = it->data(0, Qt::UserRole).toString();
         admin = admin_->isChecked();
@@ -215,9 +240,9 @@ MainWindow::MainWindow(const QString &path)
         if (i.isValid())
             showMenu(TreeModel::nodeAt(i), treeView_->viewport()->mapToGlobal(pos));
     });
-    connect(treeView_, &QTreeView::doubleClicked, this, [](const QModelIndex &i) {
+    connect(treeView_, &QTreeView::doubleClicked, this, [this](const QModelIndex &i) {
         Node *n = TreeModel::nodeAt(i);
-        if (!n->isDir)
+        if (!n->isDir && localTree())
             QDesktopServices::openUrl(QUrl::fromLocalFile(qs(n->path())));
     });
 
@@ -311,6 +336,9 @@ MainWindow::MainWindow(const QString &path)
             QTimer::singleShot(0, this, [this, path] { openSnapshot(path); });
         else
             QTimer::singleShot(0, this, [this, path] { startScan(path); });
+    } else if (settings_.openLast && QFileInfo::exists(qs(lastScanFile()))) {
+        openedLast_ = true;
+        QTimer::singleShot(0, this, [this] { openSnapshot(qs(lastScanFile())); });
     } else {
         QTimer::singleShot(0, this, &MainWindow::chooseTarget);
     }
@@ -349,6 +377,10 @@ void MainWindow::buildActions()
     connect(actSaveSnap, &QAction::triggered, this, &MainWindow::saveSnapshotDialog);
     QAction *actCsv = act(QT("Export as CSV…"), "document-export");
     connect(actCsv, &QAction::triggered, this, &MainWindow::exportCsvDialog);
+    QAction *actHtml = act(QT("Export HTML report…"), "text-html");
+    connect(actHtml, &QAction::triggered, this, &MainWindow::exportHtmlDialog);
+    QAction *actPng = act(QT("Save map as image…"), "image-x-generic");
+    connect(actPng, &QAction::triggered, this, &MainWindow::exportPngDialog);
 
     QAction *actZoomIn = act(QT("Zoom in"), "zoom-in", QKeySequence("Ctrl++"));
     connect(actZoomIn, &QAction::triggered, this, &MainWindow::zoomInSelected);
@@ -385,6 +417,18 @@ void MainWindow::buildActions()
     actAge_->setCheckable(true);
     actAge_->setToolTip(QT("Color the treemap by when files last changed instead of by type"));
     connect(actAge_, &QAction::toggled, this, &MainWindow::setColorByAge);
+    actSunburst_ = act(QT("Sunburst"), "chart-pie", QKeySequence("F7"));
+    actSunburst_->setCheckable(true);
+    actSunburst_->setToolTip(QT("Show the map as rings around the folder instead of rectangles"));
+    connect(actSunburst_, &QAction::toggled, this, &MainWindow::setSunburst);
+    actOpenLast_ = act(QT("Reopen the last scan at start"), "document-open-recent");
+    actOpenLast_->setCheckable(true);
+    connect(actOpenLast_, &QAction::toggled, this, [this](bool on) {
+        settings_.openLast = on;
+        saveSettings();
+        if (!on)
+            QFile::remove(qs(lastScanFile()));
+    });
 
     QAction *actCopy = act(QT("Copy path"), "edit-copy", QKeySequence("Ctrl+C"));
     connect(actCopy, &QAction::triggered, this, [this] {
@@ -433,6 +477,28 @@ void MainWindow::buildActions()
     });
     QAction *actCompare = act(QT("Compare with snapshot…"), "document-compare");
     connect(actCompare, &QAction::triggered, this, &MainWindow::compareDialog);
+    QAction *actPackages = act(QT("Installed packages…"), "package-x-generic");
+    actPackages->setToolTip(QT("pacman and Flatpak packages by size, with orphans"));
+    actPackages->setEnabled(havePacman() || haveProgram("flatpak"));
+    connect(actPackages, &QAction::triggered, this, [this] {
+        runTool(T("Installed packages"), [](Job &j) { j.result = packageSizes(j); }, false);
+    });
+    QAction *actBtrfs = act(QT("Btrfs: shared and compressed data…"), "drive-multidisk");
+    actBtrfs->setToolTip(QT("How much is shared with snapshots or reflinks (and frees nothing when deleted), and how much is compressed"));
+    connect(actBtrfs, &QAction::triggered, this, [this] {
+        Node *root = rootNode();
+        runTool(T("Btrfs: shared and compressed data"), [root](Job &j) { j.result = btrfsUsage(root, j); });
+    });
+    QAction *actHistory = act(QT("Size history…"), "office-chart-line");
+    connect(actHistory, &QAction::triggered, this, [this] {
+        Node *root = rootNode();
+        const bool ap = session_.apparent;
+        runTool(T("Size history"), [root, ap](Job &j) { j.result = historyGrowth(root, ap, j); });
+    });
+    actRecord_ = act(QT("Record size history weekly"), "media-record");
+    actRecord_->setCheckable(true);
+    actRecord_->setToolTip(QT("Saves the size of this folder every week (systemd user timer) for the size history"));
+    connect(actRecord_, &QAction::toggled, this, &MainWindow::setRecording);
 
     QToolBar *tb = addToolBar(QT("Tools"));
     tb->setObjectName("main_toolbar");
@@ -454,9 +520,9 @@ void MainWindow::buildActions()
         }
     };
     fill(tb, {actOpen, actRescan, actStop_, nullptr, actZoomIn, actZoomOut_, actZoomReset, nullptr,
-              actApparent_, actOneFs_, actGroup_, actTreemap_, actAge_, nullptr, actFind});
-    fill(menuBar()->addMenu(QT("&File")), {actOpen, actRescan, actStop_, nullptr, actOpenSnap, actSaveSnap, actCsv,
-                                           nullptr, actQuit});
+              actApparent_, actOneFs_, actGroup_, actTreemap_, actSunburst_, actAge_, nullptr, actFind});
+    fill(menuBar()->addMenu(QT("&File")), {actOpen, actRescan, actStop_, nullptr, actOpenSnap, actSaveSnap, nullptr,
+                                           actHtml, actPng, actCsv, nullptr, actQuit});
     fill(menuBar()->addMenu(QT("&Edit")), {actCopy, nullptr, actTrash, actDelete});
     QMenu *view = menuBar()->addMenu(QT("&View"));
     fill(view, {actZoomIn, actZoomOut_, actZoomReset, nullptr, actApparent_, actOneFs_, actGroup_});
@@ -469,7 +535,7 @@ void MainWindow::buildActions()
         thrGroup->addAction(a);
         connect(a, &QAction::triggered, this, [this, n] { setGroupMin(n); });
     }
-    fill(view, {nullptr, actTreemap_, actAge_});
+    fill(view, {nullptr, actTreemap_, actSunburst_, actAge_, nullptr, actOpenLast_});
     QMenu *themeMenu = view->addMenu(QT("Theme"));
     auto *themeGroup = new QActionGroup(this);
     for (auto [id, label] : {std::pair{"system", N_("System")}, {"light", N_("Light")}, {"dark", N_("Dark")}}) {
@@ -481,14 +547,18 @@ void MainWindow::buildActions()
     }
     QMenu *langMenu = view->addMenu(QT("Language"));
     auto *langGroup = new QActionGroup(this);
-    for (auto [id, label] : {std::pair{"system", QT("System")}, {"en", QString("English")}, {"tr", QString("Türkçe")}}) {
+    std::vector<std::pair<std::string, QString>> langs{{"system", QT("System")}};
+    for (const i18n::Language &l : i18n::languages())
+        langs.emplace_back(l.code, QString::fromStdString(l.name));
+    for (const auto &[id, label] : langs) {
         QAction *a = langMenu->addAction(label);
         a->setCheckable(true);
         a->setChecked(settings_.language == id);
         langGroup->addAction(a);
-        connect(a, &QAction::triggered, this, [this, l = std::string(id)] { setLanguage(l); });
+        connect(a, &QAction::triggered, this, [this, l = id] { setLanguage(l); });
     }
-    fill(menuBar()->addMenu(QT("&Tools")), {actFind, actDup, actClean, nullptr, actOwners, actUnowned, nullptr, actCompare});
+    fill(menuBar()->addMenu(QT("&Tools")), {actFind, actDup, actClean, nullptr, actOwners, actUnowned, actPackages, actBtrfs,
+                                            nullptr, actCompare, actHistory, actRecord_});
 
     // Kayıtlı ayarları uygula (kök yokken yalnızca durumları kurar).
     applyingSettings_ = true;
@@ -498,7 +568,10 @@ void MainWindow::buildActions()
     actGroup_->setChecked(settings_.grouping);
     actTreemap_->setChecked(settings_.showTreemap);
     actAge_->setChecked(settings_.colorByAge);
+    actSunburst_->setChecked(settings_.sunburst);
+    actOpenLast_->setChecked(settings_.openLast);
     applyingSettings_ = false;
+    updateRecordAction();
 
     QMenu *help = menuBar()->addMenu(QT("&Help"));
     help->addAction(QT("About"), this, [this] {
@@ -536,7 +609,9 @@ void MainWindow::beginBusy(const QString &title)
 
 void MainWindow::startScan(const QString &path, Node *target)
 {
-    const QString abs = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    openedLast_ = false;
+    std::string host, rpath;
+    const QString abs = parseRemote(path.toStdString(), host, rpath) ? path : QDir::cleanPath(QFileInfo(path).absoluteFilePath());
     session_.startScan(abs.toStdString(), target);
     beginBusy(target ? QString() : abs);
 }
@@ -612,6 +687,13 @@ void MainWindow::poll()
     fillExtTable();
     updateTotals();
     updateZoomLabel();
+    updateRecordAction();
+    if (openedLast_) {
+        openedLast_ = false;
+        statusLeft_->setText(QTF("Showing the saved scan from %1. Press F5 to scan again.",
+                                 {fmtTime(QFileInfo(qs(lastScanFile())).lastModified().toSecsSinceEpoch())}));
+        return;
+    }
     statusLeft_->setText(QTF("Done: %1 items in %2 s.", {fmtInt(session_.lastCount()), fmtDecimal(session_.elapsed(), 2)}));
 }
 
@@ -939,12 +1021,15 @@ void MainWindow::regroup(bool on, uint32_t minCount)
 void MainWindow::showMenu(Node *n, const QPoint &gpos)
 {
     QMenu m(this);
-    m.addAction(QIcon::fromTheme("document-open"), QT("Open"), this,
-                [n] { QDesktopServices::openUrl(QUrl::fromLocalFile(qs(n->path()))); });
-    m.addAction(QIcon::fromTheme("system-file-manager"), QT("Show in file manager"), this,
-                [n] { revealPath(n->path()); });
+    const bool local = localTree();
+    if (local) {
+        m.addAction(QIcon::fromTheme("document-open"), QT("Open"), this,
+                    [n] { QDesktopServices::openUrl(QUrl::fromLocalFile(qs(n->path()))); });
+        m.addAction(QIcon::fromTheme("system-file-manager"), QT("Show in file manager"), this,
+                    [n] { revealPath(n->path()); });
+    }
     m.addAction(QIcon::fromTheme("edit-copy"), QT("Copy path"), this, [this, n] { copyPath(n); });
-    if (havePacman() && !(n->flags & F_GROUP))
+    if (local && havePacman() && !(n->flags & F_GROUP))
         m.addAction(QIcon::fromTheme("package-x-generic"), QT("Which package owns this?"), this, [this, n] {
             QApplication::setOverrideCursor(Qt::WaitCursor);
             const std::string msg = packageOwnerMessage(n->path());
@@ -960,7 +1045,7 @@ void MainWindow::showMenu(Node *n, const QPoint &gpos)
                                            : QT("Rescan this folder"),
                     this, [this, n] { refreshNode(n); });
     }
-    if (n->parent) {
+    if (n->parent && local) {
         m.addSeparator();
         m.addAction(QIcon::fromTheme("user-trash"), QT("Move to trash"), this, [this, n] { deleteNode(n, false); });
         m.addAction(QIcon::fromTheme("edit-delete"), QT("Delete permanently…"), this, [this, n] { deleteNode(n, true); });
@@ -1013,6 +1098,10 @@ void MainWindow::deleteNode(Node *n, bool permanent, bool confirm)
 {
     if (!n->parent || session_.scanning())
         return;
+    if (!localTree()) {
+        QMessageBox::information(this, "TuxDirStat", QT("This scan is from another computer or a snapshot of one; its files cannot be deleted from here."));
+        return;
+    }
     const QString path = qs(n->path());
     const QString kind = (n->flags & F_GROUP) ? QTF("the %1 files in this group", {fmtInt(n->files)})
                          : n->isDir           ? QT("this folder")
@@ -1039,7 +1128,7 @@ void MainWindow::deleteNode(Node *n, bool permanent, bool confirm)
 
 bool MainWindow::removeQuietly(Node *n, QString *err)
 {
-    if (!n->parent || session_.scanning())
+    if (!n->parent || session_.scanning() || !localTree())
         return false;
     std::string e, firstFailed;
     if (!removeFromDisk(n, false, &e, &firstFailed)) {
@@ -1073,9 +1162,9 @@ void MainWindow::showTable(ResultTable t)
     dlg.exec();
 }
 
-void MainWindow::runTool(const char *title, std::function<void(Job &)> fn)
+void MainWindow::runTool(const char *title, std::function<void(Job &)> fn, bool needsTree)
 {
-    if (!toolReady())
+    if (needsTree ? !toolReady() : session_.scanning())
         return;
     auto job = std::make_shared<Job>(title, std::move(fn));
     runJobWithProgress(this, job, [this](Job &j) {
@@ -1190,6 +1279,97 @@ void MainWindow::compareDialog()
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
+    const bool keep = settings_.openLast && !session_.scanning() && localTree();
     session_.cancelScan();
+    if (keep) {
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        statusLeft_->setText(QT("Saving the scan for next time…"));
+        QApplication::processEvents();
+        std::string err;
+        saveLastScan(rootNode(), &err);
+        QApplication::restoreOverrideCursor();
+    }
     QMainWindow::closeEvent(e);
+}
+
+void MainWindow::exportHtmlDialog()
+{
+    if (!toolReady())
+        return;
+    QString name = QFileInfo(qs(rootNode()->path())).fileName();
+    if (name.isEmpty())
+        name = "root";
+    QString f = QFileDialog::getSaveFileName(this, QT("Export HTML report"), QDir::homePath() + "/" + name + "-report.html",
+                                             QT("HTML files (*.html);;All files (*)"));
+    if (f.isEmpty())
+        return;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    std::string err;
+    const bool ok = exportHtml(rootNode(), f.toStdString(), session_.apparent, &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, "TuxDirStat", QT("Could not write the file:") + "\n" + qs(err));
+    else
+        statusLeft_->setText(QTF("Exported: %1", {f.toStdString()}));
+}
+
+void MainWindow::exportPngDialog()
+{
+    if (!toolReady())
+        return;
+    QString f = QFileDialog::getSaveFileName(this, QT("Save map as image"), QDir::homePath() + "/tuxdirstat.png",
+                                             QT("PNG images (*.png);;All files (*)"));
+    if (f.isEmpty())
+        return;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    std::string err;
+    // The image follows what is shown: zoomed folder, colors and shape, at twice the widget size.
+    Node *root = treemap_->root() ? treemap_->root() : rootNode();
+    const bool ring = settings_.sunburst;
+    const int w = ring ? 1600 : std::max(1600, treemap_->width() * 2), h = ring ? 1600 : std::max(1000, treemap_->height() * 2);
+    const bool ok = exportMapPng(root, f.toStdString(), w, h, session_.apparent,
+                                 settings_.colorByAge ? ColorMode::Age : ColorMode::Extension,
+                                 ring ? MapShape::Rings : MapShape::Rectangles, &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, "TuxDirStat", QT("Could not write the file:") + "\n" + qs(err));
+    else
+        statusLeft_->setText(QTF("Exported: %1", {f.toStdString()}));
+}
+
+void MainWindow::updateRecordAction()
+{
+    if (!actRecord_)
+        return;
+    const bool ok = localTree();
+    actRecord_->setEnabled(ok);
+    const QSignalBlocker block(actRecord_);
+    actRecord_->setChecked(ok && historyRecording(rootNode()->path()));
+}
+
+void MainWindow::setRecording(bool on)
+{
+    if (!localTree())
+        return;
+    const std::string path = rootNode()->path();
+    std::string err;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    bool ok = setHistoryRecording(path, on, &err);
+    if (ok && on)
+        ok = recordHistorySnapshot(rootNode(), &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, "TuxDirStat", qs(err));
+    else
+        statusLeft_->setText(on ? QTF("The size of %1 is now recorded every week.", {path}) : QTF("Stopped recording %1.", {path}));
+    updateRecordAction();
+}
+
+void MainWindow::setSunburst(bool on)
+{
+    treemap_->setShape(on ? MapShape::Rings : MapShape::Rectangles);
+    if (!applyingSettings_) {
+        settings_.sunburst = on;
+        saveSettings();
+    }
 }

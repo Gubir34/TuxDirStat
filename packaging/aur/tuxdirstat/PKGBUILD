@@ -1,17 +1,20 @@
 # Maintainer: Gubir34 <e-posta@adresin>
 
 pkgname=tuxdirstat
-pkgver=1.4
+pkgver=1.5
 pkgrel=1
-pkgdesc="Fast disk usage analyzer: tree, treemap, duplicates, cleanup suggestions and snapshots (Qt, GTK 3/4 and Tk)"
+pkgdesc="Fast disk usage analyzer: treemap and sunburst, duplicates, cleanup, snapshots, SSH scans (Qt, GTK, Tk, terminal)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Gubir34/TuxDirStat"
 license=('GPL-3.0-or-later')
-depends=('qt6-base' 'gtk3' 'gtk4' 'tk' 'glib2' 'gcc-libs' 'glibc')
+depends=('qt6-base' 'gtk3' 'gtk4' 'tk' 'glib2' 'ncurses' 'zlib' 'gcc-libs' 'glibc')
 makedepends=('git' 'cmake' 'ninja' 'python')
 optdepends=('polkit: scan as administrator (pkexec)'
             'pacman-contrib: paccache command in cleanup suggestions'
-            'zstd: open .json.zst snapshots')
+            'zstd: open .json.zst snapshots'
+            'openssh: scan other computers over SSH'
+            'compsize: compressed size on disk in the btrfs view (as root)'
+            'python-nautilus: "Analyze disk usage" in the Nautilus menu')
 source=("tuxdirstat::git+https://github.com/Gubir34/TuxDirStat.git#tag=v$pkgver")
 sha256sums=('SKIP')
 
@@ -23,6 +26,7 @@ build() {
     -DTUXDIRSTAT_GTK3=ON \
     -DTUXDIRSTAT_GTK4=ON \
     -DTUXDIRSTAT_TK=ON \
+    -DTUXDIRSTAT_TUI=ON \
     -DTUXDIRSTAT_TESTS=ON
   cmake --build build
 }

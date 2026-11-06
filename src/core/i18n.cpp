@@ -1,32 +1,61 @@
 #include "i18n.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 
 namespace {
 
-bool g_turkish = false;
-bool g_explicit = false;
+struct Pair {
+    const char *en, *tr;
+};
+struct Catalog {
+    const char *code, *name;
+    char decimal, thousands;
+    const char *date;
+    const Pair *pairs;
+    size_t count;
+};
 
-// İngilizce özgün metin → Türkçe karşılığı. Yeni bir T("…") eklendiğinde buraya da
-// eklenmeli; tests/check_i18n.sh eksikleri bulur.
-const std::unordered_map<std::string_view, const char *> &turkishTable()
+#include "i18n_catalog.inc"  // generated from po/*.po
+
+const Catalog ENGLISH{"en", "English", '.', ',', "%Y-%m-%d %H:%M", nullptr, 0};
+const Catalog *g_cat = &ENGLISH;
+bool g_explicit = false;
+std::unordered_map<std::string_view, const char *> g_table;
+
+const Catalog *findCatalog(std::string_view code)
 {
-    static const std::unordered_map<std::string_view, const char *> t{
-#include "i18n_tr.inc"
-    };
-    return t;
+    for (const Catalog &c : CATALOGS)
+        if (c.count && code == c.code)
+            return &c;
+    return nullptr;
 }
 
-bool envTurkish()
+// Language from the environment: the first variable that is set wins; LANGUAGE may
+// list several languages ("tr:en").
+const Catalog *envCatalog()
 {
     for (const char *var : {"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"}) {
         const char *v = std::getenv(var);
-        if (v && *v)
-            return std::strncmp(v, "tr", 2) == 0;
+        if (!v || !*v)
+            continue;
+        std::string_view list(v);
+        while (!list.empty()) {
+            std::string_view item = list.substr(0, list.find(':'));
+            list.remove_prefix(std::min(list.size(), item.size() + 1));
+            if (item == "C" || item == "POSIX" || item.rfind("en", 0) == 0)
+                return &ENGLISH;
+            const std::string_view lang = item.substr(0, item.find_first_of("_.@"));
+            if (const Catalog *c = findCatalog(item.substr(0, item.find_first_of(".@"))))
+                return c;
+            if (const Catalog *c = findCatalog(lang))
+                return c;
+        }
+        return &ENGLISH;
     }
-    return false;
+    return &ENGLISH;
 }
 
 }  // namespace
@@ -35,8 +64,12 @@ namespace i18n {
 
 void init(const std::string &setting)
 {
-    g_explicit = setting == "en" || setting == "tr";
-    g_turkish = setting == "tr" || (setting != "en" && envTurkish());
+    const Catalog *c = setting == "en" ? &ENGLISH : findCatalog(setting);
+    g_explicit = c != nullptr;
+    g_cat = c ? c : envCatalog();
+    g_table.clear();
+    for (size_t i = 0; i < g_cat->count; ++i)
+        g_table.emplace(g_cat->pairs[i].en, g_cat->pairs[i].tr);
 }
 
 bool explicitChoice()
@@ -46,38 +79,57 @@ bool explicitChoice()
 
 void applyToEnvironment()
 {
-    if (g_explicit && g_turkish != envTurkish())
-        setenv("LANGUAGE", g_turkish ? "tr" : "en", 1);
+    if (g_explicit && envCatalog() != g_cat)
+        setenv("LANGUAGE", g_cat->code, 1);
 }
 
 bool turkish()
 {
-    return g_turkish;
+    return std::strcmp(g_cat->code, "tr") == 0;
 }
 
 const char *code()
 {
-    return g_turkish ? "tr" : "en";
+    return g_cat->code;
+}
+
+std::vector<Language> languages()
+{
+    std::vector<Language> out{{"en", "English"}};
+    for (const Catalog &c : CATALOGS)
+        if (c.count)
+            out.push_back({c.code, c.name});
+    return out;
+}
+
+bool known(const std::string &code)
+{
+    return code == "en" || findCatalog(code);
 }
 
 char decimalPoint()
 {
-    return g_turkish ? ',' : '.';
+    return g_cat->decimal;
 }
 
 char thousandsSep()
 {
-    return g_turkish ? '.' : ',';
+    return g_cat->thousands;
+}
+
+const char *dateFormat()
+{
+    return g_cat->date;
 }
 
 }  // namespace i18n
 
 const char *T(const char *en)
 {
-    if (!g_turkish)
+    if (g_table.empty())
         return en;
-    auto it = turkishTable().find(en);
-    return it != turkishTable().end() ? it->second : en;
+    auto it = g_table.find(en);
+    return it != g_table.end() ? it->second : en;
 }
 
 std::string TF(const char *en, std::initializer_list<std::string_view> args)

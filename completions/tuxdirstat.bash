@@ -1,4 +1,4 @@
-# bash completion for tuxdirstat, tuxdirstat-gtk3, tuxdirstat-gtk4 and tuxdirstat-tk
+# bash completion for tuxdirstat, tuxdirstat-gtk3, tuxdirstat-gtk4, tuxdirstat-tk and tuxdirstat-tui
 
 _tuxdirstat()
 {
@@ -6,7 +6,7 @@ _tuxdirstat()
     _init_completion || return
 
     case $prev in
-        --export | --csv)
+        --export | --csv | --html | --png | --sunburst)
             _filedir
             return
             ;;
@@ -15,20 +15,21 @@ _tuxdirstat()
             return
             ;;
         --lang)
-            COMPREPLY=($(compgen -W 'en tr' -- "$cur"))
+            COMPREPLY=($(compgen -W 'en tr' -- "$cur"))  # po/*.po
             return
             ;;
-        --top | --group-min | --find)
+        --top | --group-min | --find | --size)
             return
             ;;
     esac
 
     if [[ $cur == -* ]]; then
         COMPREPLY=($(compgen -W '--report --find --duplicates --cleanup --owners --unowned
-            --export --csv --compare --import --top --apparent --group --group-min --all-fs
+            --export --csv --compare --html --png --sunburst --btrfs --history --packages
+            --history-record --import --top --size --apparent --group --group-min --all-fs
             --lang --help --version' -- "$cur"))
         return
     fi
     _filedir
 }
-complete -F _tuxdirstat tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk
+complete -F _tuxdirstat tuxdirstat tuxdirstat-gtk3 tuxdirstat-gtk4 tuxdirstat-tk tuxdirstat-tui

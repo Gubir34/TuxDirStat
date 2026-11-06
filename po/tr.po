@@ -1,0 +1,1221 @@
+# Turkish translation of TuxDirStat.
+# Copyright (C) 2026 Gubir34
+# This file is distributed under the same license as TuxDirStat (GPL-3.0-or-later).
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TuxDirStat\n"
+"PO-Revision-Date: 2026-11-06 20:00+0300\n"
+"Last-Translator: Gubir34\n"
+"Language-Team: Turkish\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Language-Name: Türkçe\n"
+"X-Decimal-Point: ,\n"
+"X-Thousands-Separator: .\n"
+"X-Date-Format: %d.%m.%Y %H:%M\n"
+
+#. — çekirdek: biçim, gruplar, durum —
+msgid "%1 file"
+msgstr "%1 dosyası"
+
+msgid "%1 files"
+msgstr "%1 dosya"
+
+msgid "%1 folders"
+msgstr "%1 klasör"
+
+msgid "files"
+msgstr "dosya"
+
+msgid "no access"
+msgstr "erişim yok"
+
+msgid "no extension"
+msgstr "uzantısız"
+
+msgid "other file system"
+msgstr "ayrı dosya sistemi"
+
+msgid "small files"
+msgstr "küçük dosyalar"
+
+msgid "small folders"
+msgstr "küçük klasörler"
+
+msgid "(none)"
+msgstr "(yok)"
+
+msgid "(no extension)"
+msgstr "(uzantısız)"
+
+msgid "(no groups)"
+msgstr "(grup yok)"
+
+msgid "Files without an extension"
+msgstr "Uzantısız dosyalar"
+
+msgid "Numbered file (version, part or manual section)"
+msgstr "Numaralı dosya (sürüm, parça ya da kılavuz bölümü)"
+
+msgid "Not a folder: %1"
+msgstr "Klasör değil: %1"
+
+msgid "Scanning… %1 items · %2 · %3"
+msgstr "Taranıyor… %1 öğe · %2 · %3"
+
+msgid "Loading %1…"
+msgstr "%1 yükleniyor…"
+
+msgid "Waiting for administrator scan of %1…"
+msgstr "%1 için yönetici taraması bekleniyor…"
+
+msgid "Loading administrator scan…"
+msgstr "Yönetici taraması yükleniyor…"
+
+msgid "Authorization was refused or cancelled."
+msgstr "Yetkilendirme reddedildi ya da iptal edildi."
+
+msgid "pkexec could not be started (is polkit installed?)"
+msgstr "pkexec başlatılamadı (polkit kurulu mu?)"
+
+msgid "The administrator scan failed (exit code %1)."
+msgstr "Yönetici taraması başarısız oldu (çıkış kodu %1)."
+
+msgid "today"
+msgstr "bugün"
+
+msgid "this week"
+msgstr "bu hafta"
+
+msgid "this month"
+msgstr "bu ay"
+
+msgid "6 months"
+msgstr "6 ay"
+
+msgid "1 year"
+msgstr "1 yıl"
+
+msgid "2 years"
+msgstr "2 yıl"
+
+msgid "5 years"
+msgstr "5 yıl"
+
+msgid "older"
+msgstr "daha eski"
+
+#. — rapor ve komut satırı —
+msgid "TuxDirStat report: %1"
+msgstr "TuxDirStat raporu: %1"
+
+msgid "Total: %1 (%2) · %3 files · %4 folders · scanned in %5 s"
+msgstr "Toplam: %1 (%2) · %3 dosya · %4 klasör · tarama %5 sn"
+
+msgid "apparent size"
+msgstr "görünür boyut"
+
+msgid "size on disk"
+msgstr "diskte kapladığı alan"
+
+msgid "Largest folders:"
+msgstr "En büyük klasörler:"
+
+msgid "Largest files:"
+msgstr "En büyük dosyalar:"
+
+msgid "Extensions:"
+msgstr "Uzantılar:"
+
+msgid "Most crowded groups (threshold %1):"
+msgstr "En kalabalık gruplar (eşik %1):"
+
+msgid "Usage: %1 [folder]"
+msgstr "Kullanım: %1 [klasör]"
+
+msgid "%1 [options] <folder>   (no window when an output option is given)"
+msgstr "%1 [seçenekler] <klasör>   (bir çıktı seçeneği verilince pencere açılmaz)"
+
+msgid "Output options (can be combined):"
+msgstr "Çıktı seçenekleri (birlikte kullanılabilir):"
+
+msgid "text report: largest folders, files and extensions"
+msgstr "metin raporu: en büyük klasörler, dosyalar ve uzantılar"
+
+msgid "search, e.g. --find '*.iso >1G older:1y'"
+msgstr "arama, ör. --find '*.iso >1G older:1y'"
+
+msgid "list duplicate files (compares contents)"
+msgstr "kopya dosyaları listele (içerikleri karşılaştırır)"
+
+msgid "caches, build output and other things that can be cleaned"
+msgstr "önbellekler, derleme çıktıları ve temizlenebilecek diğer şeyler"
+
+msgid "disk usage per owner"
+msgstr "sahibe göre disk kullanımı"
+
+msgid "files under /usr, /etc and /opt that no pacman package owns"
+msgstr "/usr, /etc ve /opt altında hiçbir pacman paketine ait olmayan dosyalar"
+
+msgid "save the scan as a snapshot (ncdu JSON format)"
+msgstr "taramayı anlık görüntü olarak kaydet (ncdu JSON biçimi)"
+
+msgid "write every file and folder to a CSV file"
+msgstr "tüm dosya ve klasörleri bir CSV dosyasına yaz"
+
+msgid "show what changed since an earlier snapshot"
+msgstr "önceki bir anlık görüntüden bu yana nelerin değiştiğini göster"
+
+msgid "Other options:"
+msgstr "Diğer seçenekler:"
+
+msgid "read a snapshot (TuxDirStat or ncdu -o) instead of scanning"
+msgstr "taramak yerine anlık görüntü oku (TuxDirStat ya da ncdu -o)"
+
+msgid "rows per report list (default %1)"
+msgstr "her rapor listesinde satır sayısı (varsayılan %1)"
+
+msgid "use apparent size (default: size on disk)"
+msgstr "görünür boyutu kullan (varsayılan: diskte kapladığı alan)"
+
+msgid "group similar items and list the most crowded groups"
+msgstr "benzer öğeleri grupla ve en kalabalık grupları listele"
+
+msgid "minimum items per group (default %1)"
+msgstr "grup için en az öğe sayısı (varsayılan %1)"
+
+msgid "cross into other file systems"
+msgstr "başka dosya sistemlerine de geç"
+
+
+msgid "show this help"
+msgstr "bu yardımı göster"
+
+msgid "show the version"
+msgstr "sürümü göster"
+
+msgid "%1 needs a value"
+msgstr "%1 bir değer bekliyor"
+
+msgid "unknown option: %1"
+msgstr "bilinmeyen seçenek: %1"
+
+msgid "give a folder to scan (or --import FILE)"
+msgstr "taranacak bir klasör verin (ya da --import DOSYA)"
+
+msgid "pacman was not found; --unowned works on Arch-based systems."
+msgstr "pacman bulunamadı; --unowned Arch tabanlı sistemlerde çalışır."
+
+#. — araçlar: ortak sütunlar —
+msgid "Path"
+msgstr "Yol"
+
+msgid "Size"
+msgstr "Boyut"
+
+msgid "Modified"
+msgstr "Son değişiklik"
+
+msgid "Move to trash"
+msgstr "Çöp kutusuna taşı"
+
+msgid "You selected every copy of %1. Keep at least one of them."
+msgstr "%1 dosyasının tüm kopyalarını seçtiniz. En az birini bırakın."
+
+#. — arama —
+msgid "Find files"
+msgstr "Dosya bul"
+
+msgid "Nothing matches the search."
+msgstr "Aramaya uyan bir şey yok."
+
+msgid "Could not understand \"%1\"."
+msgstr "\"%1\" anlaşılamadı."
+
+msgid "Type something to search for."
+msgstr "Aranacak bir şey yazın."
+
+msgid "%1 matches"
+msgstr "%1 sonuç"
+
+msgid "files total %1"
+msgstr "dosyalar toplam %1"
+
+msgid "showing the largest %1"
+msgstr "en büyük %1 tanesi gösteriliyor"
+
+msgid ""
+"Words match file names (* and ? are wildcards). Filters:\n"
+"  >100M  <1G        size (K, M, G, T)\n"
+"  older:1y  newer:2w   last change (h, d, w, m, y)\n"
+"  type:f  type:d     files or folders only\n"
+"  ext:mp4,mkv        extensions\n"
+"  user:name          owner\n"
+"  path:Steam         text anywhere in the path\n"
+"Example: *.log >50M older:6m"
+msgstr ""
+"Sözcükler dosya adlarıyla eşleşir (* ve ? joker karakterdir). Süzgeçler:\n"
+"  >100M  <1G        boyut (K, M, G, T)\n"
+"  older:1y  newer:2w   son değişiklik (h saat, d gün, w hafta, m ay, y yıl)\n"
+"  type:f  type:d     yalnızca dosyalar ya da klasörler\n"
+"  ext:mp4,mkv        uzantılar\n"
+"  user:ad            sahibi\n"
+"  path:Steam         yolun herhangi bir yerindeki metin\n"
+"Örnek: *.log >50M older:6m"
+
+#. — kopyalar —
+msgid "Duplicate files"
+msgstr "Kopya dosyalar"
+
+msgid "No duplicate files found."
+msgstr "Kopya dosya bulunamadı."
+
+msgid "Collecting files…"
+msgstr "Dosyalar toplanıyor…"
+
+msgid "Comparing contents: %1 of %2 files"
+msgstr "İçerikler karşılaştırılıyor: %1 / %2 dosya"
+
+msgid "%1 sets · %2 files · keeping one copy of each would free %3"
+msgstr "%1 küme · %2 dosya · her birinden bir kopya bırakmak %3 açar"
+
+#. — temizlik —
+msgid "Cleanup suggestions"
+msgstr "Temizlik önerileri"
+
+msgid "What"
+msgstr "Ne"
+
+msgid "Location"
+msgstr "Konum"
+
+msgid "How"
+msgstr "Nasıl"
+
+msgid "Nothing obvious to clean up."
+msgstr "Belirgin bir temizlik önerisi yok."
+
+msgid "Looking through the scanned folders…"
+msgstr "Taranan klasörlere bakılıyor…"
+
+msgid "Checking package and system caches…"
+msgstr "Paket ve sistem önbellekleri denetleniyor…"
+
+msgid "Asking %1 about unused images…"
+msgstr "Kullanılmayan kalıplar %1 aracına soruluyor…"
+
+msgid "Unfinished download"
+msgstr "Yarım kalmış indirme"
+
+msgid "Node.js packages (npm install brings them back)"
+msgstr "Node.js paketleri (npm install geri getirir)"
+
+msgid "Python bytecode cache"
+msgstr "Python bayt kodu önbelleği"
+
+msgid "Python tool cache"
+msgstr "Python araç önbelleği"
+
+msgid "Trash on this drive"
+msgstr "Bu sürücüdeki çöp kutusu"
+
+msgid "Steam shader cache (rebuilt by Steam)"
+msgstr "Steam gölgelendirici önbelleği (Steam yeniden oluşturur)"
+
+msgid "CMake build folder"
+msgstr "CMake derleme klasörü"
+
+msgid "Rust build output (cargo clean)"
+msgstr "Rust derleme çıktısı (cargo clean)"
+
+msgid "Application cache"
+msgstr "Uygulama önbelleği"
+
+msgid "Trash"
+msgstr "Çöp kutusu"
+
+msgid "Pacman package cache"
+msgstr "Pacman paket önbelleği"
+
+msgid "System journal"
+msgstr "Sistem günlüğü"
+
+msgid "Crash dumps"
+msgstr "Çökme dökümleri"
+
+msgid "Unused Docker data"
+msgstr "Kullanılmayan Docker verisi"
+
+msgid "Unused Podman data"
+msgstr "Kullanılmayan Podman verisi"
+
+msgid "Unused Flatpak runtimes"
+msgstr "Kullanılmayan Flatpak çalışma ortamları"
+
+msgid "npm cache"
+msgstr "npm önbelleği"
+
+msgid "%1 suggestions · up to %2 could be freed"
+msgstr "%1 öneri · %2 alana kadar yer açılabilir"
+
+msgid "Review each one first. Rows with a command are run by you in a terminal."
+msgstr "Önce her birini gözden geçirin. Komutlu satırları bir uçbirimde siz çalıştırırsınız."
+
+#. — sahipler —
+msgid "Disk usage by owner"
+msgstr "Sahibe göre disk kullanımı"
+
+msgid "Owner"
+msgstr "Sahibi"
+
+msgid "Share"
+msgstr "Pay"
+
+msgid "Files"
+msgstr "Dosya"
+
+msgid "No files."
+msgstr "Dosya yok."
+
+msgid "%1 owners"
+msgstr "%1 sahip"
+
+#. — pacman —
+msgid "pacman could not be run."
+msgstr "pacman çalıştırılamadı."
+
+msgid "pacman exited with code %1."
+msgstr "pacman %1 koduyla çıktı."
+
+msgid "%1\nis not owned by any package."
+msgstr "%1\nhiçbir pakete ait değil."
+
+msgid "%1\nbelongs to the package %2."
+msgstr "%1\n%2 paketine ait."
+
+msgid "Files no package owns"
+msgstr "Hiçbir pakete ait olmayan dosyalar"
+
+msgid "Scan / (or /usr, /etc, /opt) to look for files that no package owns."
+msgstr "Hiçbir pakete ait olmayan dosyaları aramak için / (ya da /usr, /etc, /opt) klasörünü tarayın."
+
+msgid "Every scanned file under /usr, /etc and /opt belongs to a package."
+msgstr "/usr, /etc ve /opt altında taranan her dosya bir pakete ait."
+
+msgid "Reading package file lists…"
+msgstr "Paket dosya listeleri okunuyor…"
+
+msgid "pacman -Ql failed."
+msgstr "pacman -Ql başarısız oldu."
+
+msgid "Comparing with the scanned files…"
+msgstr "Taranan dosyalarla karşılaştırılıyor…"
+
+msgid "%1 items · %2"
+msgstr "%1 öğe · %2"
+
+msgid "Leftovers of removed packages, manual installs and generated files. Check before deleting (as root)."
+msgstr "Kaldırılmış paketlerden kalanlar, elle kurulanlar ve üretilmiş dosyalar. Silmeden (root olarak) önce kontrol edin."
+
+#. — anlık görüntü ve karşılaştırma —
+msgid "This is an ncdu binary export. Export with ncdu -o (JSON) instead."
+msgstr "Bu bir ncdu ikili dışa aktarımı. Bunun yerine ncdu -o (JSON) ile dışa aktarın."
+
+msgid "Not a valid ncdu / TuxDirStat snapshot (problem at byte %1)."
+msgstr "Geçerli bir ncdu / TuxDirStat anlık görüntüsü değil (%1. baytta sorun)."
+
+msgid "Could not decompress the file with %1."
+msgstr "Dosya %1 ile açılamadı."
+
+msgid "Changes since the snapshot"
+msgstr "Anlık görüntüden bu yana değişenler"
+
+msgid "Before"
+msgstr "Önce"
+
+msgid "Now"
+msgstr "Şimdi"
+
+msgid "Change"
+msgstr "Değişim"
+
+msgid "Nothing changed."
+msgstr "Hiçbir şey değişmemiş."
+
+msgid "new"
+msgstr "yeni"
+
+msgid "deleted"
+msgstr "silinmiş"
+
+msgid "Total: %1 → %2 (%3)"
+msgstr "Toplam: %1 → %2 (%3)"
+
+msgid "snapshot from %1"
+msgstr "anlık görüntü: %1"
+
+msgid "Note: the snapshot is of %1."
+msgstr "Not: anlık görüntü %1 konumuna ait."
+
+msgid "Loading the snapshot…"
+msgstr "Anlık görüntü yükleniyor…"
+
+msgid "Comparing…"
+msgstr "Karşılaştırılıyor…"
+
+#. — arayüzler: menüler ve eylemler —
+msgid "&File"
+msgstr "&Dosya"
+
+msgid "&Edit"
+msgstr "Dü&zen"
+
+msgid "&View"
+msgstr "&Görünüm"
+
+msgid "&Tools"
+msgstr "&Araçlar"
+
+msgid "&Help"
+msgstr "&Yardım"
+
+msgid "File"
+msgstr "Dosya"
+
+msgid "View"
+msgstr "Görünüm"
+
+msgid "Tools"
+msgstr "Araçlar"
+
+msgid "Menu"
+msgstr "Menü"
+
+msgid "About"
+msgstr "Hakkında"
+
+msgid "About TuxDirStat"
+msgstr "TuxDirStat hakkında"
+
+msgid "Open…"
+msgstr "Aç…"
+
+msgid "Open"
+msgstr "Aç"
+
+msgid "Rescan"
+msgstr "Yeniden tara"
+
+msgid "Stop"
+msgstr "Durdur"
+
+msgid "Quit"
+msgstr "Çıkış"
+
+msgid "Open snapshot…"
+msgstr "Anlık görüntü aç…"
+
+msgid "Save snapshot…"
+msgstr "Anlık görüntü kaydet…"
+
+msgid "Export as CSV…"
+msgstr "CSV olarak dışa aktar…"
+
+msgid "Open snapshot"
+msgstr "Anlık görüntü aç"
+
+msgid "Save snapshot"
+msgstr "Anlık görüntü kaydet"
+
+msgid "Export as CSV"
+msgstr "CSV olarak dışa aktar"
+
+msgid "Zoom in"
+msgstr "Yakınlaştır"
+
+msgid "Zoom out"
+msgstr "Uzaklaştır"
+
+msgid "Root"
+msgstr "Kök"
+
+msgid "Apparent size"
+msgstr "Görünür boyut"
+
+msgid "On: the apparent size of files (ls)\nOff: the space they take on disk (du)"
+msgstr "Açık: dosyaların görünür boyutu (ls)\nKapalı: diskte kapladığı alan (du)"
+
+msgid "One file system"
+msgstr "Tek dosya sistemi"
+
+msgid "Do not cross into other disks or mount points\n(btrfs subvolumes on the same device are included)"
+msgstr "Başka disklere/bağlama noktalarına geçme\n(aynı aygıttaki btrfs alt birimleri dahil edilir)"
+
+msgid "Group files"
+msgstr "Dosyaları grupla"
+
+msgid "Collect many similar items in a folder (like game assets) into one box:\nfiles with the same extension, small files and small subfolders"
+msgstr "Bir klasördeki çok sayıda benzer öğeyi (oyun asset'leri gibi) tek kutuda topla:\naynı uzantılı dosyalar, küçük dosyalar ve küçük alt klasörler"
+
+msgid "Grouping threshold"
+msgstr "Gruplama eşiği"
+
+msgid "At least %1 items"
+msgstr "En az %1 öğe"
+
+msgid "At least %s items"
+msgstr "En az %s öğe"
+
+msgid "Treemap"
+msgstr "Treemap"
+
+msgid "The treemap will appear here"
+msgstr "Treemap burada görünecek"
+
+msgid "Color by age"
+msgstr "Yaşa göre renklendir"
+
+msgid "Color the treemap by when files last changed instead of by type"
+msgstr "Treemap'i dosya türü yerine son değişiklik zamanına göre renklendir"
+
+msgid "Last change:"
+msgstr "Son değişiklik:"
+
+msgid "Theme"
+msgstr "Tema"
+
+msgid "System"
+msgstr "Sistem"
+
+msgid "Light"
+msgstr "Açık"
+
+msgid "Dark"
+msgstr "Koyu"
+
+msgid "Language"
+msgstr "Dil"
+
+msgid "The new language is used after TuxDirStat is restarted."
+msgstr "Yeni dil TuxDirStat yeniden başlatıldıktan sonra kullanılır."
+
+msgid "Copy path"
+msgstr "Yolu kopyala"
+
+msgid "Copy command"
+msgstr "Komutu kopyala"
+
+msgid "Copy"
+msgstr "Kopyala"
+
+msgid "Delete permanently…"
+msgstr "Kalıcı olarak sil…"
+
+msgid "Delete permanently"
+msgstr "Kalıcı olarak sil"
+
+msgid "Find files…"
+msgstr "Dosya bul…"
+
+msgid "Find…"
+msgstr "Bul…"
+
+msgid "Find"
+msgstr "Bul"
+
+msgid "Duplicate files…"
+msgstr "Kopya dosyalar…"
+
+msgid "Cleanup suggestions…"
+msgstr "Temizlik önerileri…"
+
+msgid "Usage by owner"
+msgstr "Sahibe göre kullanım"
+
+msgid "Files no package owns…"
+msgstr "Hiçbir pakete ait olmayan dosyalar…"
+
+msgid "Arch Linux: files under /usr, /etc and /opt that no pacman package owns"
+msgstr "Arch Linux: /usr, /etc ve /opt altında hiçbir pacman paketine ait olmayan dosyalar"
+
+msgid "Compare with snapshot…"
+msgstr "Anlık görüntüyle karşılaştır…"
+
+msgid "Compare with snapshot"
+msgstr "Anlık görüntüyle karşılaştır"
+
+msgid "Show in file manager"
+msgstr "Dosya yöneticisinde göster"
+
+msgid "Which package owns this?"
+msgstr "Bu hangi pakete ait?"
+
+msgid "Zoom into in treemap"
+msgstr "Treemap'te yakınlaştır"
+
+msgid "Rescan its folder"
+msgstr "Bulunduğu klasörü yeniden tara"
+
+msgid "Scan this file system too"
+msgstr "Bu dosya sistemini de tara"
+
+msgid "Rescan this folder"
+msgstr "Bu klasörü yeniden tara"
+
+msgid "Disk usage analyzer for Linux."
+msgstr "Linux için disk kullanım analizörü."
+
+msgid "Click an item in the tree or the treemap. Double-click in the treemap to zoom into a folder, Backspace goes back. Selecting a row in the extension list marks those files in the treemap."
+msgstr "Ağaçta veya treemap'te bir öğeye tıklayın; treemap'te çift tıklayarak klasöre yakınlaşın, Backspace ile geri çıkın. Uzantı listesinde bir satır seçmek o türdeki dosyaları treemap'te işaretler."
+
+msgid "License: GPL-3.0-or-later"
+msgstr "Lisans: GPL-3.0-or-later"
+
+#. — arayüzler: konum seçici —
+msgid "Location to scan"
+msgstr "Taranacak konum"
+
+msgid "Choose what to scan:"
+msgstr "Taramak istediğiniz konumu seçin:"
+
+msgid "Type"
+msgstr "Tür"
+
+msgid "Used"
+msgstr "Kullanılan"
+
+msgid "Total"
+msgstr "Toplam"
+
+msgid "Usage"
+msgstr "Doluluk"
+
+msgid "Home folder  (%1)"
+msgstr "Ev klasörü  (%1)"
+
+msgid "Scan as administrator (read-only, asks for your password)"
+msgstr "Yönetici olarak tara (salt okunur, parolanızı sorar)"
+
+msgid "Reads folders your user cannot open, such as /root or /var/lib. Deleting still uses your own rights."
+msgstr "Kullanıcınızın açamadığı /root ya da /var/lib gibi klasörleri okur. Silme işlemleri yine kendi yetkilerinizle yapılır."
+
+msgid "Scan"
+msgstr "Tara"
+
+msgid "Cancel"
+msgstr "İptal"
+
+msgid "Choose folder…"
+msgstr "Klasör seç…"
+
+msgid "Choose folder"
+msgstr "Klasör seç"
+
+msgid "Choose"
+msgstr "Seç"
+
+msgid "Save"
+msgstr "Kaydet"
+
+msgid "All files"
+msgstr "Tüm dosyalar"
+
+msgid "CSV files"
+msgstr "CSV dosyaları"
+
+msgid "CSV files (*.csv);;All files (*)"
+msgstr "CSV dosyaları (*.csv);;Tüm dosyalar (*)"
+
+msgid "Snapshots (JSON)"
+msgstr "Anlık görüntüler (JSON)"
+
+msgid "Snapshots (*.json *.json.gz *.json.zst *.json.xz);;All files (*)"
+msgstr "Anlık görüntüler (*.json *.json.gz *.json.zst *.json.xz);;Tüm dosyalar (*)"
+
+#. — arayüzler: ağaç, uzantılar, durum —
+msgid "Name"
+msgstr "Ad"
+
+msgid "Subtree"
+msgstr "Alt ağaç"
+
+msgid "Items"
+msgstr "Öğe"
+
+msgid "Folders"
+msgstr "Klasör"
+
+msgid "Extension"
+msgstr "Uzantı"
+
+msgid "Nothing scanned yet"
+msgstr "Henüz tarama yapılmadı"
+
+msgid "Open… (Ctrl+O) to choose a location"
+msgstr "Bir konum seçmek için Aç… (Ctrl+O)"
+
+msgid "%1 · %2 files · %3 folders · %4"
+msgstr "%1 · %2 dosya · %3 klasör · %4"
+
+msgid "Disk: %1 free of %2 (%3 used)"
+msgstr "Disk: %1 boş / %2 (%3 dolu)"
+
+msgid "Total: %1 · %2 files · %3 folders · Free: %4"
+msgstr "Toplam: %1 · %2 dosya · %3 klasör · Boş alan: %4"
+
+msgid "The scan failed:"
+msgstr "Tarama başarısız:"
+
+msgid "Scan stopped."
+msgstr "Tarama durduruldu."
+
+msgid "Done: %1 items in %2 s."
+msgstr "Tamamlandı: %1 öğe, %2 sn."
+
+msgid "Wait until the scan has finished."
+msgstr "Taramanın bitmesini bekleyin."
+
+msgid "Scan a folder first."
+msgstr "Önce bir klasör tarayın."
+
+msgid "Snapshot saved: %1"
+msgstr "Anlık görüntü kaydedildi: %1"
+
+msgid "Could not save the snapshot:"
+msgstr "Anlık görüntü kaydedilemedi:"
+
+msgid "Exported: %1"
+msgstr "Dışa aktarıldı: %1"
+
+msgid "Could not write the file:"
+msgstr "Dosya yazılamadı:"
+
+#. — arayüzler: silme —
+msgid "this folder"
+msgstr "Bu klasör"
+
+msgid "this file"
+msgstr "Bu dosya"
+
+msgid "the %1 files in this group"
+msgstr "Gruptaki %1 dosya"
+
+msgid "Move %1 to the trash?"
+msgstr "%1 çöp kutusuna taşınsın mı?"
+
+msgid "Delete %1 permanently?"
+msgstr "%1 kalıcı olarak silinsin mi?"
+
+msgid "Delete %1 <b>permanently</b>?"
+msgstr "%1 <b>kalıcı olarak</b> silinsin mi?"
+
+msgid "This cannot be undone."
+msgstr "Bu işlem geri alınamaz."
+
+msgid "Could not delete (or only partly deleted):"
+msgstr "Silinemedi (ya da yalnızca kısmen silindi):"
+
+#. — arayüzler: sonuç penceresi —
+msgid "Close"
+msgstr "Kapat"
+
+msgid "Show in tree"
+msgstr "Ağaçta göster"
+
+msgid "Open folder"
+msgstr "Klasörü aç"
+
+msgid "Set %1 · %2 × %3"
+msgstr "Küme %1 · %2 × %3"
+
+msgid "Move %1 items (%2) to the trash?"
+msgstr "%1 öğe (%2) çöp kutusuna taşınsın mı?"
+
+msgid "%1 items could not be moved to the trash."
+msgstr "%1 öğe çöp kutusuna taşınamadı."
+
+#. — 1.5: remote scans, sunburst, exports, packages, btrfs, history —
+msgid "%1 Flatpak apps and runtimes use %2."
+msgstr "%1 Flatpak uygulaması ve çalışma ortamı %2 kaplıyor."
+
+msgid "%1 does not exist on %2 or cannot be read."
+msgstr "%1, %2 üzerinde yok ya da okunamıyor."
+
+msgid "%1 is stored compressed (size before compression)."
+msgstr "%1 sıkıştırılmış olarak saklanıyor (sıkıştırma öncesi boyut)."
+
+msgid "%1 of %2 is shared with snapshots or reflinked copies; deleting those files frees only the exclusive part (%3)."
+msgstr "%2 verinin %1 kadarı anlık görüntülerle ya da reflink kopyalarla paylaşılıyor; bu dosyaları silmek yalnızca paylaşılmayan kısmı (%3) boşaltır."
+
+msgid "%1 orphans (%2) can be removed with: sudo pacman -Rns $(pacman -Qdtq)"
+msgstr "%1 sahipsiz paket (%2) şu komutla kaldırılabilir: sudo pacman -Rns $(pacman -Qdtq)"
+
+msgid "%1 pacman packages use %2."
+msgstr "%1 pacman paketi %2 kaplıyor."
+
+msgid "%1 recorded sizes since %2 · total %3 → %4 (%5)"
+msgstr "%2 tarihinden beri %1 kayıt · toplam %3 → %4 (%5)"
+
+msgid "(total)"
+msgstr "(toplam)"
+
+msgid "Asking Flatpak about installed apps…"
+msgstr "Kurulu uygulamalar Flatpak'e soruluyor…"
+
+msgid "Btrfs: shared and compressed data"
+msgstr "Btrfs: paylaşılan ve sıkıştırılmış veri"
+
+msgid "Btrfs: shared and compressed data…"
+msgstr "Btrfs: paylaşılan ve sıkıştırılmış veri…"
+
+msgid "Compressed"
+msgstr "Sıkıştırılmış"
+
+msgid "Contents"
+msgstr "İçerik"
+
+msgid "Could not compress the image."
+msgstr "Görüntü sıkıştırılamadı."
+
+msgid "Could not connect to %1. Scanning over SSH needs key login without a password prompt; check that \"ssh %1\" works in a terminal."
+msgstr "%1 sunucusuna bağlanılamadı. SSH ile tarama için parola sormayan anahtarla giriş gerekir; \"ssh %1\" komutunun uçbirimde çalıştığını denetleyin."
+
+msgid "Could not enable the weekly timer (systemctl --user enable --now tuxdirstat-history.timer)."
+msgstr "Haftalık zamanlayıcı açılamadı (systemctl --user enable --now tuxdirstat-history.timer)."
+
+msgid "Created by TuxDirStat %1 on %2"
+msgstr "TuxDirStat %1 ile %2 tarihinde oluşturuldu"
+
+msgid "Dependency"
+msgstr "Bağımlılık"
+
+msgid "Description"
+msgstr "Açıklama"
+
+msgid "Exclusive"
+msgstr "Paylaşılmayan"
+
+msgid "Export HTML report"
+msgstr "HTML raporu dışa aktar"
+
+msgid "Export HTML report…"
+msgstr "HTML raporu dışa aktar…"
+
+msgid "File types"
+msgstr "Dosya türleri"
+
+msgid "Files under %1 (%2 in total) were not analyzed."
+msgstr "%1 altındaki dosyalar (toplam %2) incelenmedi."
+
+msgid "Flatpak app"
+msgstr "Flatpak uygulaması"
+
+msgid "Flatpak runtime"
+msgstr "Flatpak çalışma ortamı"
+
+msgid "Folder"
+msgstr "Klasör"
+
+msgid "For the compressed size on disk run: sudo compsize -x %1"
+msgstr "Diskteki sıkıştırılmış boyut için çalıştırın: sudo compsize -x %1"
+
+msgid "Free"
+msgstr "Boş"
+
+msgid "Free on this disk"
+msgstr "Bu diskte boş"
+
+msgid "HTML files"
+msgstr "HTML dosyaları"
+
+msgid "HTML files (*.html);;All files (*)"
+msgstr "HTML dosyaları (*.html);;Tüm dosyalar (*)"
+
+msgid "HTML report with treemap and sunburst images"
+msgstr "treemap ve halka görüntülü HTML raporu"
+
+msgid "How much is shared with snapshots or reflinks (and frees nothing when deleted), and how much is compressed"
+msgstr "Ne kadarının anlık görüntülerle ya da reflink ile paylaşıldığı (silinince yer açmaz) ve ne kadarının sıkıştırıldığı"
+
+msgid "Install compsize to see the compressed size on disk."
+msgstr "Diskteki sıkıştırılmış boyutu görmek için compsize kurun."
+
+msgid "Installed by you"
+msgstr "Sizin kurduğunuz"
+
+msgid "Installed packages"
+msgstr "Kurulu paketler"
+
+msgid "Installed packages…"
+msgstr "Kurulu paketler…"
+
+msgid "Kind"
+msgstr "Tür"
+
+msgid "Largest files"
+msgstr "En büyük dosyalar"
+
+msgid "Looking for subvolumes…"
+msgstr "Alt birimler aranıyor…"
+
+msgid "Made with TuxDirStat"
+msgstr "TuxDirStat ile oluşturuldu"
+
+msgid "Map"
+msgstr "Harita"
+
+msgid "Needed by"
+msgstr "Gereken"
+
+msgid "No files to analyze."
+msgstr "İncelenecek dosya yok."
+
+msgid "No folders are recorded. Turn it on in the Tools menu (Record size history)."
+msgstr "Kaydedilen klasör yok. Araçlar menüsünden açın (Boyut geçmişini kaydet)."
+
+msgid "No package manager was found (pacman or Flatpak)."
+msgstr "Paket yöneticisi bulunamadı (pacman ya da Flatpak)."
+
+msgid "No size history for %1 yet. Turn on \"Record size history\" in the Tools menu; it saves the current scan now and the sizes every week."
+msgstr "%1 için henüz boyut geçmişi yok. Araçlar menüsünden \"Boyut geçmişini haftalık kaydet\"i açın; şimdiki taramayı hemen, boyutları da her hafta kaydeder."
+
+msgid "Not a remote location: %1"
+msgstr "Uzak konum değil: %1"
+
+msgid "Only local files can be deleted."
+msgstr "Yalnızca bu bilgisayardaki dosyalar silinebilir."
+
+msgid "Only local folders can be recorded."
+msgstr "Yalnızca bu bilgisayardaki klasörler kaydedilebilir."
+
+msgid "Only local scans are kept."
+msgstr "Yalnızca bu bilgisayardaki taramalar saklanır."
+
+msgid "Orphan (nothing needs it)"
+msgstr "Sahipsiz (hiçbir şey gerektirmiyor)"
+
+msgid "Other computer (SSH):"
+msgstr "Başka bilgisayar (SSH):"
+
+msgid "PNG images"
+msgstr "PNG görüntüleri"
+
+msgid "PNG images (*.png);;All files (*)"
+msgstr "PNG görüntüleri (*.png);;Tüm dosyalar (*)"
+
+msgid "Package"
+msgstr "Paket"
+
+msgid "Reading %1…"
+msgstr "%1 okunuyor…"
+
+msgid "Reading the extents of %1 files…"
+msgstr "%1 dosyanın kapsamları okunuyor…"
+
+msgid "Reading the pacman database…"
+msgstr "pacman veritabanı okunuyor…"
+
+msgid "Record size history weekly"
+msgstr "Boyut geçmişini haftalık kaydet"
+
+msgid "Recorded %1: %2"
+msgstr "%1 kaydedildi: %2"
+
+msgid "Reopen the last scan at start"
+msgstr "Açılışta son taramayı göster"
+
+msgid "Save map as image"
+msgstr "Haritayı görüntü olarak kaydet"
+
+msgid "Save map as image…"
+msgstr "Haritayı görüntü olarak kaydet…"
+
+msgid "Saves the size of this folder every week (systemd user timer) for the size history"
+msgstr "Boyut geçmişi için bu klasörün boyutunu her hafta kaydeder (systemd kullanıcı zamanlayıcısı)"
+
+msgid "Saving the scan for next time…"
+msgstr "Tarama bir dahaki sefer için kaydediliyor…"
+
+msgid "Scanning %1 over SSH…"
+msgstr "%1 SSH ile taranıyor…"
+
+msgid "Scans a folder on another computer over SSH. Needs key login without a password prompt."
+msgstr "Başka bir bilgisayardaki klasörü SSH ile tarar. Parola sormayan anahtarla giriş gerekir."
+
+msgid "Shared"
+msgstr "Paylaşılan"
+
+msgid "Show the map as rings around the folder instead of rectangles"
+msgstr "Haritayı dikdörtgenler yerine klasörün çevresinde halkalar olarak göster"
+
+msgid "Showing the saved scan from %1. Press F5 to scan again."
+msgstr "%1 tarihli kayıtlı tarama gösteriliyor. Yeniden taramak için F5'e basın."
+
+msgid "Size history"
+msgstr "Boyut geçmişi"
+
+msgid "Size history…"
+msgstr "Boyut geçmişi…"
+
+msgid "Size on disk"
+msgstr "Diskteki boyut"
+
+msgid "Snapshot"
+msgstr "Anlık görüntü"
+
+msgid "Status"
+msgstr "Durum"
+
+msgid "Stopped recording %1."
+msgstr "%1 artık kaydedilmiyor."
+
+msgid "Subvolume"
+msgstr "Alt birim"
+
+msgid "Sunburst"
+msgstr "Halka görünümü"
+
+msgid "The remote folder could not be read."
+msgstr "Uzak klasör okunamadı."
+
+msgid "The remote path is not a folder."
+msgstr "Uzak yol bir klasör değil."
+
+msgid "The size of %1 is now recorded every week."
+msgstr "%1 boyutu artık her hafta kaydediliyor."
+
+msgid "This folder is not on a btrfs file system."
+msgstr "Bu klasör btrfs dosya sisteminde değil."
+
+msgid "This scan is from another computer or a snapshot of one; its files cannot be deleted from here."
+msgstr "Bu tarama başka bir bilgisayara (ya da onun anlık görüntüsüne) ait; dosyaları buradan silinemez."
+
+msgid "Total size"
+msgstr "Toplam boyut"
+
+msgid "Trend"
+msgstr "Eğilim"
+
+msgid "Weekly recording is off for this folder."
+msgstr "Bu klasör için haftalık kayıt kapalı."
+
+msgid "Write the remote location as host:/path, e.g. pi:/home"
+msgstr "Uzak konumu sunucu:/yol biçiminde yazın, ör. pi:/home"
+
+msgid "btrfs: data shared with snapshots, compressed data"
+msgstr "btrfs: anlık görüntülerle paylaşılan ve sıkıştırılmış veri"
+
+msgid "host:/path, e.g. pi:/home"
+msgstr "sunucu:/yol, ör. pi:/home"
+
+msgid "image size for --png and --sunburst (default %1)"
+msgstr "--png ve --sunburst için görüntü boyutu (varsayılan %1)"
+
+msgid "installed pacman and Flatpak packages by size (no scan)"
+msgstr "kurulu pacman ve Flatpak paketleri, boyuta göre (tarama yapmaz)"
+
+msgid "interface language (en, tr, …)"
+msgstr "arayüz dili (en, tr, …)"
+
+msgid "invalid size: %1 (use e.g. 1600x1000)"
+msgstr "geçersiz boyut: %1 (ör. 1600x1000 kullanın)"
+
+msgid "pacman -Qi failed."
+msgstr "pacman -Qi başarısız oldu."
+
+msgid "pacman and Flatpak packages by size, with orphans"
+msgstr "pacman ve Flatpak paketleri boyuta göre, sahipsizlerle birlikte"
+
+msgid "scan cancelled"
+msgstr "tarama iptal edildi"
+
+msgid "scan the recorded folders and save their sizes (used by the weekly timer)"
+msgstr "kaydedilen klasörleri tarayıp boyutlarını saklar (haftalık zamanlayıcı kullanır)"
+
+msgid "size history of the folder (see --history-record)"
+msgstr "klasörün boyut geçmişi (bkz. --history-record)"
+
+msgid "ssh was not found; install OpenSSH to scan other computers."
+msgstr "ssh bulunamadı; başka bilgisayarları taramak için OpenSSH kurun."
+
+msgid "sunburst image (PNG)"
+msgstr "halka görüntüsü (PNG)"
+
+msgid "systemd was not found; run \"tuxdirstat --history-record\" regularly yourself (e.g. from cron)."
+msgstr "systemd bulunamadı; \"tuxdirstat --history-record\" komutunu düzenli olarak kendiniz çalıştırın (ör. cron ile)."
+
+msgid "treemap image (PNG)"
+msgstr "treemap görüntüsü (PNG)"
+
+#. — terminal interface —
+msgid "%1 free"
+msgstr "%1 boş"
+
+msgid "(empty folder)"
+msgstr "(boş klasör)"
+
+msgid "Deleted: %1 (%2)"
+msgstr "Silindi: %1 (%2)"
+
+msgid "Find (e.g. *.iso >1G older:1y):"
+msgstr "Bul (ör. *.iso >1G older:1y):"
+
+msgid "Keys"
+msgstr "Tuşlar"
+
+msgid "Nothing found."
+msgstr "Hiçbir şey bulunamadı."
+
+msgid "Press Esc or q to stop."
+msgstr "Durdurmak için Esc ya da q tuşuna basın."
+
+msgid "Total: %1 · %2 files · %3 folders"
+msgstr "Toplam: %1 · %2 dosya · %3 klasör"
+
+msgid "move"
+msgstr "hareket"
+
+msgid "open the folder"
+msgstr "klasörü aç"
+
+msgid "back to the parent folder"
+msgstr "üst klasöre dön"
+
+msgid "sort by size / name / items / date (again: reverse)"
+msgstr "boyuta / ada / öğe sayısına / tarihe göre sırala (tekrar: ters)"
+
+msgid "apparent size or size on disk"
+msgstr "görünür boyut ya da diskte kapladığı alan"
+
+msgid "group similar items"
+msgstr "benzer öğeleri grupla"
+
+msgid "move to trash"
+msgstr "çöp kutusuna taşı"
+
+msgid "delete permanently"
+msgstr "kalıcı olarak sil"
+
+msgid "rescan this folder / everything"
+msgstr "bu klasörü / her şeyi yeniden tara"
+
+msgid "find files (same syntax as the windowed versions)"
+msgstr "dosya bul (pencereli sürümlerle aynı sözdizimi)"
+
+msgid "file types"
+msgstr "dosya türleri"
+
+msgid "information about the selected item"
+msgstr "seçili öğe hakkında bilgi"
+
+msgid "quit"
+msgstr "çık"
+
+msgid "↑↓ move  Enter show in tree  Esc back  q quit"
+msgstr "↑↓ hareket  Enter ağaçta göster  Esc geri  q çık"
+
+msgid "↑↓ move  →/Enter open  ← back  s/n/c/m sort  d trash  D delete  / find  t types  i info  ? help  q quit"
+msgstr "↑↓ hareket  →/Enter aç  ← geri  s/n/c/m sırala  d çöpe  D sil  / bul  t türler  i bilgi  ? yardım  q çık"
