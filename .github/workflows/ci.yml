@@ -44,7 +44,7 @@ jobs:
       - name: Command line smoke test
         run: |
           ./build/tuxdirstat --version
-          ./build/tuxdirstat --report --top 5 --duplicates --cleanup --owners --export /tmp/s.json /usr/share/doc
+          ./build/tuxdirstat --report --top 5 --duplicates --cleanup --owners --export /tmp/s.json /usr/include
           ./build/tuxdirstat --lang tr --import /tmp/s.json --compare /tmp/s.json --find '>1K type:f'
       - name: Install and validate metadata
         run: |

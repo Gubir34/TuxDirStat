@@ -359,7 +359,7 @@ int runCommandLine(int argc, char **argv)
         while (!sc.isDone())
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         if (!sc.error.empty()) {
-            std::cerr << prog << ": " << sc.error << "\n";
+            std::cerr << prog << ": " << path << ": " << sc.error << "\n";
             return 1;
         }
         tree = sc.takeTree();
